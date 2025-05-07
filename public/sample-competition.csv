@@ -1,0 +1,16 @@
+Sn. No,Report Date,Run Date,Unique Product ID,Brand Name,Category,Product Description,Quantity,City,Pincode,Area,FG Code,SKU ID,Platform,MRP,Selling Price,Stock Availability (Y/N),Discount
+1,01-06-2023,02-06-2023,PID001,Brand A,Beverages,Cola Drink,330ml,Mumbai,400001,Colaba,FG001,SKU001,Amazon,45,40,Yes,11.11
+2,01-06-2023,02-06-2023,PID001,Brand A,Beverages,Cola Drink,330ml,Mumbai,400001,Colaba,FG001,SKU001,Flipkart,45,43,Yes,4.44
+3,01-06-2023,02-06-2023,PID001,Brand A,Beverages,Cola Drink,330ml,Delhi,110001,Connaught Place,FG001,SKU001,Swiggy,45,42,No,6.67
+4,01-06-2023,02-06-2023,PID002,Brand B,Snacks,Potato Chips,100g,Mumbai,400001,Colaba,FG002,SKU002,Swiggy,30,28,Yes,6.67
+5,01-06-2023,02-06-2023,PID002,Brand B,Snacks,Potato Chips,100g,Bangalore,560001,MG Road,FG002,SKU002,Blinkit,30,27,Yes,10.00
+6,01-06-2023,02-06-2023,PID002,Brand B,Snacks,Potato Chips,100g,Delhi,110001,Connaught Place,FG002,SKU002,Zepto,30,26,Yes,13.33
+7,01-06-2023,02-06-2023,PID003,Brand C,Dairy,Milk,500ml,Mumbai,400001,Colaba,FG003,SKU003,Zepto,25,25,No,0.00
+8,01-06-2023,02-06-2023,PID003,Brand C,Dairy,Milk,500ml,Bangalore,560001,MG Road,FG003,SKU003,Blinkit,25,24,Yes,4.00
+9,01-06-2023,02-06-2023,PID003,Brand C,Dairy,Milk,500ml,Delhi,110001,Connaught Place,FG003,SKU003,Swiggy,25,24,Yes,4.00
+10,01-06-2023,02-06-2023,PID004,Brand D,Personal Care,Shampoo,200ml,Mumbai,400001,Colaba,FG004,SKU004,Amazon,120,108,Yes,10.00
+11,01-06-2023,02-06-2023,PID004,Brand D,Personal Care,Shampoo,200ml,Bangalore,560001,MG Road,FG004,SKU004,Flipkart,120,110,Yes,8.33
+12,01-06-2023,02-06-2023,PID004,Brand D,Personal Care,Shampoo,200ml,Delhi,110001,Connaught Place,FG004,SKU004,Swiggy,120,115,No,4.17
+13,02-06-2023,03-06-2023,PID001,Brand A,Beverages,Cola Drink,330ml,Mumbai,400001,Colaba,FG001,SKU001,Amazon,45,39,Yes,13.33
+14,02-06-2023,03-06-2023,PID001,Brand A,Beverages,Cola Drink,330ml,Mumbai,400001,Colaba,FG001,SKU001,Flipkart,45,41,Yes,8.89
+15,02-06-2023,03-06-2023,PID001,Brand A,Beverages,Cola Drink,330ml,Delhi,110001,Connaught Place,FG001,SKU001,Swiggy,45,40,Yes,11.11 

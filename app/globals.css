@@ -1,0 +1,254 @@
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 24 100% 50%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 85%;
+    --input: 240 5.9% 90%;
+    --ring: 24 100% 50%;
+    --radius: 0.75rem;
+    --sidebar-background: 24 75% 5%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 24 100% 50%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 24 70% 10%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 24 60% 15%;
+    --sidebar-ring: 24 100% 50%;
+  }
+
+  .dark {
+    --background: 0 0% 7%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 24 100% 50%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 24 100% 50%;
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 24 100% 50%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 24 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+  h1 {
+    @apply text-4xl md:text-5xl;
+  }
+  h2 {
+    @apply text-3xl md:text-4xl;
+  }
+  h3 {
+    @apply text-2xl md:text-3xl;
+  }
+  p {
+    @apply leading-7;
+  }
+}
+
+.card-hover {
+  @apply transition-all duration-200 hover:shadow-lg hover:shadow-primary/10;
+}
+
+.card-grid {
+  @apply grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+}
+
+.card-grid-2 {
+  @apply grid grid-cols-1 gap-6 md:grid-cols-2;
+}
+
+/* Improved spacing and typography */
+.space-y-6 {
+  @apply space-y-8;
+}
+
+/* Improved card styling */
+.card {
+  @apply rounded-xl border shadow-sm;
+}
+
+/* Better typography for dashboard */
+.dashboard-text {
+  @apply tracking-tight text-foreground;
+}
+
+/* High contrast text for light mode */
+.high-contrast {
+  @apply text-gray-900 dark:text-white;
+}
+
+/* Enhanced chart styling */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  @apply stroke-gray-300 dark:stroke-gray-700;
+}
+
+.recharts-text {
+  @apply fill-gray-700 dark:fill-gray-300 text-xs font-medium;
+}
+
+.recharts-tooltip-wrapper {
+  @apply !shadow-lg !rounded-lg !border !border-gray-200 dark:!border-gray-700;
+}
+
+.recharts-default-tooltip {
+  @apply !bg-white dark:!bg-gray-800 !text-gray-900 dark:!text-gray-100 !rounded-lg !border-0 !shadow-none !px-4 !py-2;
+}
+
+/* Improve chart line visibility */
+.recharts-line-curve {
+  @apply !stroke-[3px];
+}
+
+.recharts-line {
+  @apply !stroke-[3px];
+}
+
+.recharts-line-dot {
+  @apply !stroke-[2px];
+}
+
+/* Improve axis colors and visibility */
+.recharts-cartesian-axis-line {
+  @apply !stroke-gray-400 dark:!stroke-gray-600 !stroke-[1.5px];
+}
+
+.recharts-cartesian-axis-tick-line {
+  @apply !stroke-gray-400 dark:!stroke-gray-600 !stroke-[1.5px];
+}
+
+.recharts-cartesian-axis-tick-value {
+  @apply !fill-gray-700 dark:!fill-gray-300 font-medium;
+}
+
+.recharts-label {
+  @apply !fill-gray-700 dark:!fill-gray-300 font-medium;
+}
+
+/* Card and data display improvements */
+.data-card {
+  @apply p-5 rounded-xl border bg-card text-card-foreground shadow-sm;
+}
+
+.trend-card {
+  @apply flex flex-col gap-4 p-5 md:p-6;
+}
+
+.platform-metrics {
+  @apply grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5;
+}
+
+.metrics-card {
+  @apply flex flex-col gap-2 rounded-lg border p-3 md:p-4;
+}
+
+.badge-change-positive {
+  @apply bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400;
+}
+
+.badge-change-negative {
+  @apply bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400;
+}
+
+.badge-change-neutral {
+  @apply bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-400;
+}
+
+/* Data tables */
+.data-table {
+  @apply w-full;
+}
+
+.data-table th {
+  @apply font-medium text-left p-3 text-muted-foreground text-sm;
+}
+
+.data-table td {
+  @apply p-3 border-t text-sm;
+}
+
+.data-table tr:hover td {
+  @apply bg-muted/50;
+}
+
+/* Full-width table styles */
+.full-width-table {
+  @apply w-full table-fixed;
+}
+
+.full-width-table th {
+  @apply text-left p-3 font-medium text-muted-foreground text-sm;
+}
+
+.full-width-table td {
+  @apply p-3 border-t text-sm;
+}
+
+.full-width-table tr:hover td {
+  @apply bg-muted/50;
+}
+
+/* Regional table specific */
+.pincode-table {
+  @apply w-full border-collapse;
+}
+
+.pincode-table th {
+  @apply text-left p-4 font-medium text-muted-foreground text-sm;
+}
+
+.pincode-table td {
+  @apply p-4 border-t text-sm;
+}
+
+/* Custom utilities */
+@layer utilities {
+  .stroke-width-2 {
+    stroke-width: 2px;
+  }
+}
+
