@@ -1,21 +1,31 @@
-"use client"
+"use client";
 
-import { FilterBar } from "@/components/filters/filter-bar"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { BarChart, PieChart } from "@/components/ui/chart"
-import { Badge } from "@/components/ui/badge"
-import { useData } from "@/components/data-provider"
-import { Skeleton } from "@/components/ui/skeleton"
+import { FilterBar } from "@/components/filters/filter-bar";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { BarChart, PieChart } from "@/components/ui/chart";
+import { Badge } from "@/components/ui/badge";
+import { useData } from "@/components/data-provider";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useFilters } from "@/components/filters/filter-provider";
 
 export default function PlatformInsightsPage() {
-  const { isLoading, platformData, platformShareData } = useData()
+  const { isLoading, platformData, platformShareData } = useData();
+  const { filters } = useFilters();
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Platform Insights</h2>
-        <p className="text-muted-foreground">Compare performance across Swiggy, Flipkart, Zepto, and Blinkit.</p>
+        <p className="text-muted-foreground">
+          Compare performance across Swiggy, Flipkart, Zepto, and Blinkit.
+        </p>
       </div>
 
       <Separator />
@@ -25,8 +35,12 @@ export default function PlatformInsightsPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="card-hover col-span-2">
           <CardHeader>
-            <CardTitle>Platform Ranking by Sales Value</CardTitle>
-            <CardDescription>Comparative sales performance across all platforms</CardDescription>
+            <CardTitle>
+              Platform Ranking by Sales Value for {filters.brand}
+            </CardTitle>
+            <CardDescription>
+              Comparative sales performance across all platforms
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -39,8 +53,10 @@ export default function PlatformInsightsPage() {
                 categories={["salesValue"]}
                 index="name"
                 colors={["#ff6d00"]}
-                valueFormatter={(value: number) => `₹${(value / 1000).toFixed(0)}K`}
-                showLegend={false}
+                valueFormatter={(value: number) =>
+                  `₹${(value / 1000).toFixed(0)}K`
+                }
+                showLegend={true}
                 showGridLines={true}
                 className="aspect-[21/9]"
               />
@@ -51,7 +67,9 @@ export default function PlatformInsightsPage() {
         <Card className="card-hover">
           <CardHeader className="pb-3">
             <CardTitle>7-Day Trend Lines</CardTitle>
-            <CardDescription>Key metrics changes over the last week</CardDescription>
+            <CardDescription>
+              Key metrics changes over the last week
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -63,24 +81,32 @@ export default function PlatformInsightsPage() {
                 <div className="trend-card">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-medium">Price Change</h4>
-                    <span className="text-xs text-muted-foreground">Last 7 days</span>
+                    <span className="text-xs text-muted-foreground">
+                      Last 7 days
+                    </span>
                   </div>
                   <div className="platform-metrics">
                     {platformData.map((platform) => (
-                      <div key={`price-${platform.name}`} className="metrics-card">
+                      <div
+                        key={`price-${platform.name}`}
+                        className="metrics-card"
+                      >
                         <p className="text-xs font-medium">{platform.name}</p>
                         <Badge
                           variant="outline"
                           className={`mt-1 ${
-                            platform.priceChange > 0 
-                              ? "badge-change-negative" 
-                              : platform.priceChange < 0 
-                                ? "badge-change-positive" 
-                                : "badge-change-neutral"
+                            platform.priceChange > 0
+                              ? "badge-change-negative"
+                              : platform.priceChange < 0
+                              ? "badge-change-positive"
+                              : "badge-change-neutral"
                           }`}
                         >
-                          {isNaN(platform.priceChange) ? "--" : 
-                            `${platform.priceChange > 0 ? "+" : ""}${platform.priceChange}%`}
+                          {isNaN(platform.priceChange)
+                            ? "--"
+                            : `${platform.priceChange > 0 ? "+" : ""}${
+                                platform.priceChange
+                              }%`}
                         </Badge>
                       </div>
                     ))}
@@ -90,24 +116,32 @@ export default function PlatformInsightsPage() {
                 <div className="trend-card">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-medium">Discount Change</h4>
-                    <span className="text-xs text-muted-foreground">Last 7 days</span>
+                    <span className="text-xs text-muted-foreground">
+                      Last 7 days
+                    </span>
                   </div>
                   <div className="platform-metrics">
                     {platformData.map((platform) => (
-                      <div key={`discount-${platform.name}`} className="metrics-card">
+                      <div
+                        key={`discount-${platform.name}`}
+                        className="metrics-card"
+                      >
                         <p className="text-xs font-medium">{platform.name}</p>
                         <Badge
                           variant="outline"
                           className={`mt-1 ${
-                            platform.discountChange > 0 
-                              ? "badge-change-positive" 
-                              : platform.discountChange < 0 
-                                ? "badge-change-negative" 
-                                : "badge-change-neutral"
+                            platform.discountChange > 0
+                              ? "badge-change-positive"
+                              : platform.discountChange < 0
+                              ? "badge-change-negative"
+                              : "badge-change-neutral"
                           }`}
                         >
-                          {isNaN(platform.discountChange) ? "--" : 
-                            `${platform.discountChange > 0 ? "+" : ""}${platform.discountChange}%`}
+                          {isNaN(platform.discountChange)
+                            ? "--"
+                            : `${platform.discountChange > 0 ? "+" : ""}${
+                                platform.discountChange
+                              }%`}
                         </Badge>
                       </div>
                     ))}
@@ -117,24 +151,32 @@ export default function PlatformInsightsPage() {
                 <div className="trend-card">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-medium">Availability Change</h4>
-                    <span className="text-xs text-muted-foreground">Last 7 days</span>
+                    <span className="text-xs text-muted-foreground">
+                      Last 7 days
+                    </span>
                   </div>
                   <div className="platform-metrics">
                     {platformData.map((platform) => (
-                      <div key={`avail-${platform.name}`} className="metrics-card">
+                      <div
+                        key={`avail-${platform.name}`}
+                        className="metrics-card"
+                      >
                         <p className="text-xs font-medium">{platform.name}</p>
                         <Badge
                           variant="outline"
                           className={`mt-1 ${
-                            platform.availabilityChange > 0 
-                              ? "badge-change-positive" 
-                              : platform.availabilityChange < 0 
-                                ? "badge-change-negative" 
-                                : "badge-change-neutral"
+                            platform.availabilityChange > 0
+                              ? "badge-change-positive"
+                              : platform.availabilityChange < 0
+                              ? "badge-change-negative"
+                              : "badge-change-neutral"
                           }`}
                         >
-                          {isNaN(platform.availabilityChange) ? "--" : 
-                            `${platform.availabilityChange > 0 ? "+" : ""}${platform.availabilityChange}%`}
+                          {isNaN(platform.availabilityChange)
+                            ? "--"
+                            : `${platform.availabilityChange > 0 ? "+" : ""}${
+                                platform.availabilityChange
+                              }%`}
                         </Badge>
                       </div>
                     ))}
@@ -148,7 +190,9 @@ export default function PlatformInsightsPage() {
         <Card className="card-hover">
           <CardHeader>
             <CardTitle>Platform Share</CardTitle>
-            <CardDescription>Distribution of sales across platforms</CardDescription>
+            <CardDescription>
+              Distribution of sales across platforms
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -169,5 +213,5 @@ export default function PlatformInsightsPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

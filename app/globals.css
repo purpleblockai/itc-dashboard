@@ -24,13 +24,13 @@
     --input: 240 5.9% 90%;
     --ring: 24 100% 50%;
     --radius: 0.75rem;
-    --sidebar-background: 24 75% 5%;
-    --sidebar-foreground: 0 0% 98%;
+    --sidebar-background: 0 0% 95%;
+    --sidebar-foreground: 240 10% 3.9%;
     --sidebar-primary: 24 100% 50%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 24 70% 10%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 24 60% 15%;
+    --sidebar-accent: 24 60% 90%;
+    --sidebar-accent-foreground: 240 10% 3.9%;
+    --sidebar-border: 240 5.9% 85%;
     --sidebar-ring: 24 100% 50%;
   }
 
@@ -72,7 +72,12 @@
   body {
     @apply bg-background text-foreground;
   }
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-semibold tracking-tight;
   }
   h1 {
@@ -251,4 +256,3 @@
     stroke-width: 2px;
   }
 }
-

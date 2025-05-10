@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useState } from "react"
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -12,73 +12,142 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
-} from "@/components/ui/sidebar"
-import { Icons } from "@/components/icons"
-import { Button } from "@/components/ui/button"
-import { ThemeSwitch } from "./theme-switch"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { Icons } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import { ThemeSwitch } from "./theme-switch";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export function DashboardSidebar() {
-  const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const {
+    setOpen,
+    toggleSidebar: toggleContextSidebar,
+    open,
+    state,
+  } = useSidebar();
 
   const isActive = (path: string) => {
-    return pathname === path
-  }
+    return pathname === path;
+  };
 
   const toggleSidebar = () => {
-    setCollapsed(!collapsed)
-  }
+    setOpen(!open);
+  };
 
   return (
     <div className="relative">
-      <Sidebar className={collapsed ? "w-[4rem] transition-all duration-300" : "transition-all duration-300"}>
+      <Sidebar
+        collapsible="icon"
+        className={
+          state === "collapsed"
+            ? "w-[5rem] text-foreground"
+            : "w-[240px] text-foreground"
+        }
+      >
         <SidebarHeader className="flex items-center justify-center py-6">
-          <div className={`flex items-center ${collapsed ? "justify-center" : "space-x-2"}`}>
+          <div
+            className={`flex items-center ${
+              state === "collapsed" ? "justify-center" : "space-x-2"
+            }`}
+          >
             <Icons.logo className="h-8 w-8 text-nuvr-orange" />
-            {!collapsed && <span className="text-xl font-bold">Nuvr</span>}
+            {!(state === "collapsed") && (
+              <span className="text-xl font-bold text-foreground">Nuvr</span>
+            )}
           </div>
         </SidebarHeader>
         <SidebarSeparator />
-        <SidebarContent>
-          <SidebarMenu>
+        <SidebarContent className="mt-4">
+          <SidebarMenu
+            className={state === "collapsed" ? "items-center gap-2" : "gap-2"}
+          >
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/dashboard")}>
-                <Link href="/dashboard" className={`flex ${collapsed ? "justify-center" : "justify-start"}`}>
+                <Link
+                  href="/dashboard"
+                  className={`flex ${
+                    state === "collapsed" ? "justify-center" : "justify-start"
+                  } text-foreground hover:text-foreground`}
+                >
                   <Icons.home className="h-5 w-5" />
-                  {!collapsed && <span>Overview</span>}
+                  {!(state === "collapsed") && (
+                    <span className="ml-2">Overview</span>
+                  )}
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/dashboard/regional")}>
-                <Link href="/dashboard/regional" className={`flex ${collapsed ? "justify-center" : "justify-start"}`}>
+              <SidebarMenuButton
+                asChild
+                isActive={isActive("/dashboard/regional")}
+              >
+                <Link
+                  href="/dashboard/regional"
+                  className={`flex ${
+                    state === "collapsed" ? "justify-center" : "justify-start"
+                  } text-foreground hover:text-foreground`}
+                >
                   <Icons.map className="h-5 w-5" />
-                  {!collapsed && <span>Regional Analysis</span>}
+                  {!(state === "collapsed") && (
+                    <span className="ml-2">Regional Analysis</span>
+                  )}
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/dashboard/platform")}>
-                <Link href="/dashboard/platform" className={`flex ${collapsed ? "justify-center" : "justify-start"}`}>
+              <SidebarMenuButton
+                asChild
+                isActive={isActive("/dashboard/platform")}
+              >
+                <Link
+                  href="/dashboard/platform"
+                  className={`flex ${
+                    state === "collapsed" ? "justify-center" : "justify-start"
+                  } text-foreground hover:text-foreground`}
+                >
                   <Icons.chart className="h-5 w-5" />
-                  {!collapsed && <span>Platform Insights</span>}
+                  {!(state === "collapsed") && (
+                    <span className="ml-2">Platform Insights</span>
+                  )}
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/dashboard/brand")}>
-                <Link href="/dashboard/brand" className={`flex ${collapsed ? "justify-center" : "justify-start"}`}>
+              <SidebarMenuButton
+                asChild
+                isActive={isActive("/dashboard/brand")}
+              >
+                <Link
+                  href="/dashboard/brand"
+                  className={`flex ${
+                    state === "collapsed" ? "justify-center" : "justify-start"
+                  } text-foreground hover:text-foreground`}
+                >
                   <Icons.tag className="h-5 w-5" />
-                  {!collapsed && <span>Brand Evaluation</span>}
+                  {!(state === "collapsed") && (
+                    <span className="ml-2">Brand Evaluation</span>
+                  )}
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/dashboard/settings")}>
-                <Link href="/dashboard/settings" className={`flex ${collapsed ? "justify-center" : "justify-start"}`}>
+              <SidebarMenuButton
+                asChild
+                isActive={isActive("/dashboard/settings")}
+              >
+                <Link
+                  href="/dashboard/settings"
+                  className={`flex ${
+                    state === "collapsed" ? "justify-center" : "justify-start"
+                  } text-foreground hover:text-foreground`}
+                >
                   <Icons.settings className="h-5 w-5" />
-                  {!collapsed && <span>Settings</span>}
+                  {!(state === "collapsed") && (
+                    <span className="ml-2">Settings</span>
+                  )}
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -86,29 +155,41 @@ export function DashboardSidebar() {
         </SidebarContent>
         <SidebarSeparator />
         <SidebarFooter className="p-4 space-y-4">
-          {!collapsed && (
+          {!(state === "collapsed") && (
             <div className="flex items-center justify-between px-2">
-              <span className="text-sm text-sidebar-foreground/70">Theme</span>
+              <span className="text-sm text-foreground/70">Theme</span>
               <ThemeSwitch />
             </div>
           )}
-          <Button variant="outline" className={`${collapsed ? "justify-center" : "justify-start"} w-full`} asChild>
+          <Button
+            variant="outline"
+            className={`${
+              state === "collapsed" ? "justify-center" : "justify-start"
+            } w-full text-foreground`}
+            asChild
+          >
             <Link href="/login">
-              <Icons.logout className={collapsed ? "" : "mr-2"} size={16} />
-              {!collapsed && <span>Log out</span>}
+              <Icons.logout
+                className={state === "collapsed" ? "" : "mr-2"}
+                size={16}
+              />
+              {!(state === "collapsed") && <span>Log out</span>}
             </Link>
           </Button>
         </SidebarFooter>
+        <Button
+          variant="outline"
+          size="icon"
+          className="absolute -right-3 top-[68px] h-6 w-6 rounded-full border bg-background shadow-md z-10 text-foreground"
+          onClick={toggleSidebar}
+        >
+          {state === "collapsed" ? (
+            <ChevronRight size={14} />
+          ) : (
+            <ChevronLeft size={14} />
+          )}
+        </Button>
       </Sidebar>
-      {/* Toggle button */}
-      <Button 
-        variant="outline" 
-        size="icon" 
-        className="absolute -right-3 top-20 h-6 w-6 rounded-full border bg-background shadow-md"
-        onClick={toggleSidebar}
-      >
-        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-      </Button>
     </div>
-  )
+  );
 }

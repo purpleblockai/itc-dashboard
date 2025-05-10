@@ -278,7 +278,7 @@ export function ScatterChart({
           tick={{ fontSize: 12 }}
           tickLine={{ stroke: "#888" }}
           axisLine={{ stroke: "#888" }}
-          domain={['dataMin - 1', 'dataMax + 1']}
+          // domain={['dataMin - 2.2', 'dataMax + 1']}
         >
           <Label value={xAxisLabel} offset={-20} position="insideBottom" style={{ fontSize: '12px', fill: '#666' }} />
         </XAxis>
@@ -290,7 +290,7 @@ export function ScatterChart({
           tick={{ fontSize: 12 }}
           tickLine={{ stroke: "#888" }}
           axisLine={{ stroke: "#888" }}
-          domain={['dataMin - 5', 'dataMax + 5']}
+          // domain={['dataMin - 31', 'dataMax + 5']}
         >
           <Label value={yAxisLabel} angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: '12px', fill: '#666' }} />
         </YAxis>
@@ -319,7 +319,7 @@ export function ScatterChart({
               fontSize: 12,
               fill: '#333',
               fontWeight: 700,
-              textShadow: '0 0 5px white, 0 0 5px white, 0 0 5px white, 0 0 5px white',
+              // textShadow: '0 0 5px white, 0 0 5px white, 0 0 5px white, 0 0 5px white',
               backgroundColor: 'rgba(255, 255, 255, 0.7)',
               padding: '2px'
             }}
