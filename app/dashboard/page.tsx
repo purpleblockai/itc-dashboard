@@ -17,7 +17,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { useSession } from "next-auth/react"
 import { useFilters } from "@/components/filters/filter-provider"
-import { getCoverageByCompetitorData, getCoverageByBrandData } from "@/lib/data-service"
+import { getCoverageByBrandData } from "@/lib/data-service"
+import { badgeVariants } from "@/components/ui/badge"
 
 // Define type for the user with additional properties
 interface ExtendedUser {
@@ -163,19 +164,19 @@ export default function DashboardPage() {
               title="Coverage"
               value={`${kpis.coverage.toFixed(1)}%`}
               icon={Icons.network}
-              tooltip="Coverage = Availability % across all possible serviceables."
+              tooltip="Coverage = Availability % × Penetration %"
             />
             <KpiCard 
               title="Penetration" 
               value={`${kpis.penetration.toFixed(1)}%`}
               icon={Icons.chart} 
-              tooltip="Penetration = Listed % across all possible serviceables."
+              tooltip="Penetration = Listed Pincodes / Serviceable Pincodes"
             />
             <KpiCard
               title="Availability"
               value={`${kpis.availability.toFixed(1)}%`}
               icon={Icons.check}
-              tooltip="Availability = % Available Pincodes across all possible listed pincodes."
+              tooltip="Availability = Available Pincodes / Listed Pincodes"
             />
           </>
         )}

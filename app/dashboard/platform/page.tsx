@@ -17,6 +17,15 @@ import { useFilters } from "@/components/filters/filter-provider";
 import { useState } from "react";
 import { ProcessedData } from "@/lib/data-service";
 import { Icons } from "@/components/icons";
+import { 
+  calculateKPIs
+} from "@/lib/data-service";
+import { badgeVariants } from "@/components/ui/badge";
+import { ResponsiveContainer, LineChart as RechartsLineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import React from "react";
+
+// Define platform colors for consistent styling
+const PLATFORM_COLORS = ["#ff6d00", "#0088fe", "#00c49f", "#9B59B6", "#F1C40F"];
 
 export default function PlatformInsightsPage() {
   const { isLoading, platformData, platformShareData, filteredData, timeSeriesData } = useData();
@@ -124,55 +133,11 @@ export default function PlatformInsightsPage() {
   const platformMetricsData = !isLoading ? 
     groupByPlatform(filteredData).map(
       ([platformName, { items, platform }]) => {
-        // Group data by pincode
-        const pincodeMap = new Map<string, ProcessedData[]>();
-        items.forEach(item => {
-          if (!pincodeMap.has(item.pincode)) {
-            pincodeMap.set(item.pincode, []);
-          }
-          pincodeMap.get(item.pincode)!.push(item);
-        });
-        
-        // Get all unique pincodes for this platform (serviceable)
-        const serviceablePincodes = new Set();
-        pincodeMap.forEach((pincodeItems, pincode) => {
-          const isServiceable = pincodeItems.some(item => item.availability === "Yes");
-          if (isServiceable) {
-            serviceablePincodes.add(pincode);
-          }
-        });
-        
-        // Get pincodes where products are listed
-        const listedPincodes = new Set();
-        pincodeMap.forEach((pincodeItems, pincode) => {
-          const isListed = pincodeItems.some(item => 
-            item.availability === "Yes" || item.availability === "No");
-          if (isListed) {
-            listedPincodes.add(pincode);
-          }
-        });
-        
-        // Get pincodes where products are available
-        const availablePincodes = new Set();
-        pincodeMap.forEach((pincodeItems, pincode) => {
-          const isAvailable = pincodeItems.some(item => item.availability === "Yes");
-          if (isAvailable) {
-            availablePincodes.add(pincode);
-          }
-        });
-        
-        // Calculate penetration = Listed / Serviceable
-        const penetration = serviceablePincodes.size > 0 ?
-          (listedPincodes.size / serviceablePincodes.size) * 100 : 0;
-        
-        // Calculate availability = Available / Listed
-        const availability = listedPincodes.size > 0 ?
-          (availablePincodes.size / listedPincodes.size) * 100 : 0;
-          
+        const metrics = calculateKPIs(items);
         return {
           name: platform,
-          availability: parseFloat(availability.toFixed(1)),
-          penetration: parseFloat(penetration.toFixed(1))
+          availability: parseFloat(metrics.availability.toFixed(1)),
+          penetration: parseFloat(metrics.penetration.toFixed(1))
         };
       }
     ).sort((a, b) => a.name.localeCompare(b.name)) 
@@ -206,62 +171,35 @@ export default function PlatformInsightsPage() {
       return formatDateForComparison(item.reportDate) === date;
     });
     
-    // Group data by pincode
-    const pincodeMap = new Map<string, ProcessedData[]>();
-    items.forEach(item => {
-      if (!pincodeMap.has(item.pincode)) {
-        pincodeMap.set(item.pincode, []);
-      }
-      pincodeMap.get(item.pincode)!.push(item);
-    });
+    // If no items for this date, return zeroes
+    if (items.length === 0) {
+      return {
+        penetration: 0,
+        availability: 0,
+        coverage: 0,
+        discount: 0
+      };
+    }
     
-    // Get all unique pincodes for this date (serviceable)
-    const serviceablePincodes = new Set();
-    pincodeMap.forEach((pincodeItems, pincode) => {
-      const isServiceable = pincodeItems.some(item => item.availability === "Yes");
-      if (isServiceable) {
-        serviceablePincodes.add(pincode);
-      }
-    });
-    
-    // Get pincodes where products are listed
-    const listedPincodes = new Set();
-    pincodeMap.forEach((pincodeItems, pincode) => {
-      const isListed = pincodeItems.some(item => 
-        item.availability === "Yes" || item.availability === "No");
-      if (isListed) {
-        listedPincodes.add(pincode);
-      }
-    });
-    
-    // Get pincodes where products are available
-    const availablePincodes = new Set();
-    pincodeMap.forEach((pincodeItems, pincode) => {
-      const isAvailable = pincodeItems.some(item => item.availability === "Yes");
-      if (isAvailable) {
-        availablePincodes.add(pincode);
-      }
-    });
-    
-    // Calculate penetration = Listed / Serviceable
-    const penetration = serviceablePincodes.size > 0 ?
-      (listedPincodes.size / serviceablePincodes.size) * 100 : 0;
-    
-    // Calculate availability = Available / Listed
-    const availability = listedPincodes.size > 0 ?
-      (availablePincodes.size / listedPincodes.size) * 100 : 0;
-      
-    // Calculate coverage = Penetration * Availability / 100
-    const coverage = (penetration * availability) / 100;
+    // Use the updated metrics calculation function from data-service
+    const metricsResult = calculateKPIs(items);
     
     // Calculate average discount
     const totalDiscount = items.reduce((sum, item) => sum + item.discount, 0);
     const avgDiscount = items.length > 0 ? totalDiscount / items.length : 0;
     
+    // Log the metrics result for debugging
+    console.log("[DEBUG] Metrics result:", {
+      penetration: metricsResult.penetration,
+      availability: metricsResult.availability,
+      coverage: metricsResult.coverage,
+      coverageMethod1: metricsResult.coverageMethod1
+    });
+    
     return {
-      penetration: parseFloat(penetration.toFixed(1)),
-      availability: parseFloat(availability.toFixed(1)),
-      coverage: parseFloat(coverage.toFixed(1)),
+      penetration: parseFloat(metricsResult.penetration.toFixed(1)),
+      availability: parseFloat(metricsResult.availability.toFixed(1)),
+      coverage: parseFloat(metricsResult.coverageMethod1.toFixed(1)), // Use Method 1 for coverage
       discount: parseFloat(avgDiscount.toFixed(1))
     };
   };
@@ -269,7 +207,7 @@ export default function PlatformInsightsPage() {
   const latestMetrics = !isLoading && latestDate ? calculateMetricsForDate(latestDate) : null;
   const previousMetrics = !isLoading && previousDate ? calculateMetricsForDate(previousDate) : null;
   
-  // Calculate deltas
+  // Update the metricDeltas to include only the main coverage metric
   const metricDeltas = !isLoading && latestMetrics && previousMetrics ? {
     penetration: parseFloat((latestMetrics.penetration - previousMetrics.penetration).toFixed(1)),
     availability: parseFloat((latestMetrics.availability - previousMetrics.availability).toFixed(1)),
@@ -281,72 +219,26 @@ export default function PlatformInsightsPage() {
   const coverageByPlatformData = !isLoading ? 
     reportDates.map(date => {
       // Create one entry per date with display format
-      const dateEntry: any = { date: formatDateForDisplay(date) };
+      const dateEntry: any = {
+        date: formatDateForDisplay(date)
+      };
       
-      // For each platform, calculate coverage for this date
+      // For each platform, calculate metrics for this date
       platformNames.forEach(platform => {
         // Get items for this date and platform
-        const items = filteredData.filter(item => {
-          if (!item.reportDate || !item.platform) return false;
-          return formatDateForComparison(item.reportDate) === date && item.platform === platform;
+        const platformItems = filteredData.filter(item => {
+          if (!item.reportDate) return false;
+          return formatDateForComparison(item.reportDate) === date && 
+                 item.platform === platform;
         });
         
-        // Initialize with default value of 0
+        // Calculate metrics for this platform and date
+        if (platformItems.length > 0) {
+          const platformMetrics = calculateKPIs(platformItems);
+          dateEntry[platform] = parseFloat(platformMetrics.coverageMethod1.toFixed(1));
+        } else {
         dateEntry[platform] = 0;
-        
-        if (items.length === 0) {
-          return;
         }
-        
-        // Group data by pincode
-        const pincodeMap = new Map<string, ProcessedData[]>();
-        items.forEach(item => {
-          if (!pincodeMap.has(item.pincode)) {
-            pincodeMap.set(item.pincode, []);
-          }
-          pincodeMap.get(item.pincode)!.push(item);
-        });
-        
-        // Get all unique pincodes for this platform and date
-        const serviceablePincodes = new Set();
-        pincodeMap.forEach((pincodeItems, pincode) => {
-          const isServiceable = pincodeItems.some(item => item.availability === "Yes");
-          if (isServiceable) {
-            serviceablePincodes.add(pincode);
-          }
-        });
-        
-        // Get pincodes where products are listed
-        const listedPincodes = new Set();
-        pincodeMap.forEach((pincodeItems, pincode) => {
-          const isListed = pincodeItems.some(item => 
-            item.availability === "Yes" || item.availability === "No");
-          if (isListed) {
-            listedPincodes.add(pincode);
-          }
-        });
-        
-        // Get pincodes where products are available
-        const availablePincodes = new Set();
-        pincodeMap.forEach((pincodeItems, pincode) => {
-          const isAvailable = pincodeItems.some(item => item.availability === "Yes");
-          if (isAvailable) {
-            availablePincodes.add(pincode);
-          }
-        });
-        
-        // Calculate penetration = Listed / Serviceable
-        const penetration = serviceablePincodes.size > 0 ?
-          (listedPincodes.size / serviceablePincodes.size) * 100 : 0;
-        
-        // Calculate availability = Available / Listed
-        const availability = listedPincodes.size > 0 ?
-          (availablePincodes.size / listedPincodes.size) * 100 : 0;
-          
-        // Calculate coverage = Penetration * Availability / 100
-        const coverage = (penetration * availability) / 100;
-        
-        dateEntry[platform] = parseFloat(coverage.toFixed(1));
       });
       
       return dateEntry;
@@ -463,12 +355,103 @@ export default function PlatformInsightsPage() {
           </CardContent>
         </Card>
 
-        {/* Graph 3: Trend line cards for key metrics */}
-        <Card className="card-hover">
+        {/* Metrics Cards */}
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          {/* Penetration */}
+          <Card className="col-span-1">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Penetration
+              </CardTitle>
+              <div className={badgeVariants({ variant: "outline" })}>
+                <span className={metricDeltas?.penetration && metricDeltas.penetration > 0 ? "text-green-500" : metricDeltas?.penetration && metricDeltas.penetration < 0 ? "text-destructive" : ""}>
+                  {metricDeltas?.penetration && metricDeltas.penetration > 0 ? "+" : ""}{metricDeltas?.penetration || 0}%
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {latestMetrics?.penetration || 0}%
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Listed Pincodes / Serviceable Pincodes
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Availability */}
+          <Card className="col-span-1">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Availability
+              </CardTitle>
+              <div className={badgeVariants({ variant: "outline" })}>
+                <span className={metricDeltas?.availability && metricDeltas.availability > 0 ? "text-green-500" : metricDeltas?.availability && metricDeltas.availability < 0 ? "text-destructive" : ""}>
+                  {metricDeltas?.availability && metricDeltas.availability > 0 ? "+" : ""}{metricDeltas?.availability || 0}%
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {latestMetrics?.availability || 0}%
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Available Pincodes / Listed Pincodes
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Coverage */}
+          <Card className="col-span-1">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Coverage
+              </CardTitle>
+              <div className={badgeVariants({ variant: "outline" })}>
+                <span className={metricDeltas?.coverage && metricDeltas.coverage > 0 ? "text-green-500" : metricDeltas?.coverage && metricDeltas.coverage < 0 ? "text-destructive" : ""}>
+                  {metricDeltas?.coverage && metricDeltas.coverage > 0 ? "+" : ""}{metricDeltas?.coverage || 0}%
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {latestMetrics?.coverage || 0}%
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Availability % × Penetration %
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Discount */}
+          <Card className="col-span-1">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Avg. Discount
+              </CardTitle>
+              <div className={badgeVariants({ variant: "outline" })}>
+                <span className={metricDeltas?.discount && metricDeltas.discount > 0 ? "text-green-500" : metricDeltas?.discount && metricDeltas.discount < 0 ? "text-destructive" : ""}>
+                  {metricDeltas?.discount && metricDeltas.discount > 0 ? "+" : ""}{metricDeltas?.discount || 0}%
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {latestMetrics?.discount || 0}%
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Average discount across all products
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Graph 4: Multi-line chart — Coverage % by platform vs. Date */}
+        <Card className="col-span-3 card-hover">
           <CardHeader>
-            <CardTitle>Key Metrics Trends</CardTitle>
+            <CardTitle>Coverage Over Time by Platform</CardTitle>
             <CardDescription>
-              Changes in metrics from previous report
+              Comparing coverage trends across platforms
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -477,96 +460,61 @@ export default function PlatformInsightsPage() {
                 <Skeleton className="h-full w-full" />
               </div>
             ) : (
-              latestMetrics && metricDeltas ? (
-                <div className="grid gap-4 grid-cols-2">
-                  <div className="bg-background rounded-lg p-4 border">
-                    <div className="text-sm font-medium text-muted-foreground mb-2">Penetration</div>
-                    <div className="flex items-baseline justify-between">
-                      <div className="text-2xl font-bold">{latestMetrics.penetration}%</div>
-                      <div className={`flex items-center text-sm font-medium ${metricDeltas.penetration >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {metricDeltas.penetration >= 0 ? 
-                          <Icons.arrowUp className="mr-1 h-4 w-4" /> : 
-                          <Icons.arrowDown className="mr-1 h-4 w-4" />}
-                        {Math.abs(metricDeltas.penetration)}%
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-background rounded-lg p-4 border">
-                    <div className="text-sm font-medium text-muted-foreground mb-2">Availability</div>
-                    <div className="flex items-baseline justify-between">
-                      <div className="text-2xl font-bold">{latestMetrics.availability}%</div>
-                      <div className={`flex items-center text-sm font-medium ${metricDeltas.availability >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {metricDeltas.availability >= 0 ? 
-                          <Icons.arrowUp className="mr-1 h-4 w-4" /> : 
-                          <Icons.arrowDown className="mr-1 h-4 w-4" />}
-                        {Math.abs(metricDeltas.availability)}%
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-background rounded-lg p-4 border">
-                    <div className="text-sm font-medium text-muted-foreground mb-2">Coverage</div>
-                    <div className="flex items-baseline justify-between">
-                      <div className="text-2xl font-bold">{latestMetrics.coverage}%</div>
-                      <div className={`flex items-center text-sm font-medium ${metricDeltas.coverage >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {metricDeltas.coverage >= 0 ? 
-                          <Icons.arrowUp className="mr-1 h-4 w-4" /> : 
-                          <Icons.arrowDown className="mr-1 h-4 w-4" />}
-                        {Math.abs(metricDeltas.coverage)}%
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-background rounded-lg p-4 border">
-                    <div className="text-sm font-medium text-muted-foreground mb-2">Avg Discount</div>
-                    <div className="flex items-baseline justify-between">
-                      <div className="text-2xl font-bold">{latestMetrics.discount}%</div>
-                      <div className={`flex items-center text-sm font-medium ${metricDeltas.discount >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {metricDeltas.discount >= 0 ? 
-                          <Icons.arrowUp className="mr-1 h-4 w-4" /> : 
-                          <Icons.arrowDown className="mr-1 h-4 w-4" />}
-                        {Math.abs(metricDeltas.discount)}%
-                      </div>
-                    </div>
-                  </div>
+              coverageByPlatformData.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsLineChart
+                      data={coverageByPlatformData}
+                      margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                    >
+                      <XAxis 
+                        dataKey="date" 
+                        stroke="#888888"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        stroke="#888888"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => `${value}%`}
+                      />
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <Tooltip 
+                        formatter={(value: number) => [`${value}%`, 'Coverage']}
+                        labelStyle={{ color: "#020817" }} 
+                        contentStyle={{ 
+                          backgroundColor: "hsl(var(--card))",
+                          borderColor: "hsl(var(--border))" 
+                        }}
+                        cursor={{ stroke: '#888888', strokeWidth: 1 }}
+                      />
+                      <Legend />
+                      
+                      {/* Generate one line per platform */}
+                      {platformNames.map((platform, index) => {
+                        // Use consistent colors for each platform
+                        const color = PLATFORM_COLORS[index % PLATFORM_COLORS.length];
+                        return (
+                          <Line
+                            key={platform}
+                            type="monotone"
+                            dataKey={platform}
+                            name={platform}
+                            stroke={color}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 4, stroke: color, strokeWidth: 1 }}
+                          />
+                        );
+                      })}
+                    </RechartsLineChart>
+                  </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <p className="text-muted-foreground">No trend data available</p>
-                </div>
-              )
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Graph 4: Multi-line chart — Coverage % by platform vs. Date */}
-        <Card className="card-hover col-span-2">
-          <CardHeader>
-            <CardTitle>Coverage by Platform</CardTitle>
-            <CardDescription>
-              Platform-wise coverage percentage over time
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="aspect-[21/9] w-full">
-                <Skeleton className="h-full w-full" />
-              </div>
-            ) : (
-              ensurePlatformData().length > 0 ? (
-                <LineChart
-                  data={ensurePlatformData()}
-                  categories={platformNames}
-                  index="date"
-                  colors={["#ff6d00", "#0088fe", "#00c49f", "#9B59B6", "#F1C40F"]}
-                  valueFormatter={(value: number) => `${value}%`}
-                  showLegend={true}
-                  showGridLines={true}
-                  className="aspect-[21/9]"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
+                <div className="flex h-[300px] w-full items-center justify-center">
                   <p className="text-muted-foreground">No coverage data available</p>
                 </div>
               )

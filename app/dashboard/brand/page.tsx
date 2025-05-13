@@ -18,6 +18,7 @@ import { useData } from "@/components/data-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect } from "react";
 import { ProcessedData } from "@/lib/data-service";
+import { calculateKPIs } from "@/lib/data-service";
 
 export default function BrandEvaluationPage() {
   const { isLoading, brandData: initialBrandData, productData, filteredData } = useData();
@@ -30,67 +31,24 @@ export default function BrandEvaluationPage() {
   }, [productData]);
 
   // Function to calculate brand-level metrics from product data
-  function calculateBrandData(products: any[]) {
+  function calculateBrandData(products: any[], filteredData: ProcessedData[]) {
     const brands = Array.from(new Set(products.map((p) => p.brand)));
     return brands.map((brand) => {
-      const items = products.filter((p) => p.brand === brand);
-
-      // Build an array of valid discounts by coercing strings → numbers
-      const discounts = items
-        .map((p: any) => {
-          const mrp = parseFloat(p.mrp as any);
-          const sp = parseFloat(p.sellingPrice as any);
-          if (!isNaN(mrp) && mrp > 0 && !isNaN(sp)) {
-            return ((mrp - sp) / mrp) * 100;
-          }
-          return null;
-        })
-        .filter((d): d is number => d !== null && isFinite(d));
-
-      const avgDiscount =
-        discounts.length > 0
-          ? discounts.reduce((a: number, b: number) => a + b, 0) /
-            discounts.length
-          : 0;
-
-      const availabilities = items
-        .map((p: any) => parseFloat(p.availability as any))
-        .filter((v: number) => !isNaN(v) && isFinite(v));
-
-      const avgAvailability = availabilities.length
-        ? availabilities.reduce((a: number, b: number) => a + b, 0) /
-          availabilities.length
-        : 0;
-
-      // Calculate penetration metrics
-      const penetrations = items
-        .map((p: any) => parseFloat(p.penetration as any))
-        .filter((v: number) => !isNaN(v) && isFinite(v));
-
-      const avgPenetration = penetrations.length
-        ? penetrations.reduce((a: number, b: number) => a + b, 0) /
-          penetrations.length
-        : 0;
-
-      // Calculate coverage metrics (penetration * availability / 100)
-      const avgCoverage = (avgPenetration * avgAvailability) / 100;
-
+      const items = filteredData.filter((item) => item.brand === brand);
+      const metrics = calculateKPIs(items);
       return {
         name: brand,
-        avgDiscount,
-        availability: avgAvailability,
-        penetration: avgPenetration,
-        coverage: avgCoverage,
+        avgDiscount: parseFloat(metrics.avgDiscount.toFixed(1)),
+        availability: parseFloat(metrics.availability.toFixed(1)),
+        penetration: parseFloat(metrics.penetration.toFixed(1)),
+        coverage: parseFloat(metrics.coverageMethod1.toFixed(1)),
         skuCount: items.length,
       };
     });
   }
 
   // Use the precomputed brandData if available; otherwise compute from scratch
-  const brandData =
-    initialBrandData && initialBrandData.length > 0
-      ? initialBrandData
-      : calculateBrandData(productData);
+  const brandData = !isLoading ? calculateBrandData(productData, filteredData) : [];
 
   console.log("Final brandData:", brandData);
 
@@ -523,62 +481,19 @@ export default function BrandEvaluationPage() {
               <DataTable
                 columns={columns}
                 data={productData.map(p => {
-                  // Calculate discount from actual mrp and selling price
+                  const productItems = filteredData.filter((item: ProcessedData) => 
+                    item.productId === p.brand + '_' + p.name ||
+                    item.productDescription === p.name
+                  );
+                  const metrics = calculateKPIs(productItems);
                   const discount = p.mrp && p.sellingPrice ? 
                     parseFloat((((p.mrp - p.sellingPrice) / p.mrp) * 100).toFixed(1)) : 
                     undefined;
-                  
-                  // Get all data for this product to calculate coverage and penetration
-                  const productItems = filteredData.filter((item: ProcessedData) => 
-                    item.productId === p.brand + '_' + p.name || // Try a common product ID pattern
-                    item.productDescription === p.name // Or match by description
-                  );
-                  
-                  // If no matching items found, use the existing availability value
-                  if (productItems.length === 0) {
-                    return {
-                      ...p,
-                      coverage: 0,
-                      penetration: 0,
-                      discount
-                    };
-                  }
-                  
-                  // Get all unique pincodes for this product (serviceable)
-                  const serviceablePincodes = new Set(productItems.map((item: ProcessedData) => item.pincode));
-                  
-                  // Get pincodes where this product is listed
-                  const listedPincodes = new Set();
-                  productItems.forEach((item: ProcessedData) => {
-                    if (item.platform) {
-                      listedPincodes.add(item.pincode);
-                    }
-                  });
-                  
-                  // Get pincodes where this product is available
-                  const availablePincodes = new Set();
-                  productItems.forEach((item: ProcessedData) => {
-                    if (item.stockAvailable) {
-                      availablePincodes.add(item.pincode);
-                    }
-                  });
-                  
-                  // Calculate penetration = Listed / Serviceable
-                  const penetration = serviceablePincodes.size > 0 ?
-                    (listedPincodes.size / serviceablePincodes.size) * 100 : 0;
-                  
-                  // Calculate availability = Available / Listed
-                  const availability = listedPincodes.size > 0 ?
-                    (availablePincodes.size / listedPincodes.size) * 100 : 0;
-                  
-                  // Calculate coverage = Penetration * Availability / 100
-                  const coverage = (penetration * availability) / 100;
-                  
                   return {
                     ...p,
-                    coverage: parseFloat(coverage.toFixed(1)),
-                    penetration: parseFloat(penetration.toFixed(1)),
-                    availability: parseFloat(availability.toFixed(1)),
+                    coverage: parseFloat(metrics.coverageMethod1.toFixed(1)),
+                    penetration: parseFloat(metrics.penetration.toFixed(1)),
+                    availability: parseFloat(metrics.availability.toFixed(1)),
                     discount
                   };
                 })}

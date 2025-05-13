@@ -13,6 +13,7 @@ import { useData } from "@/components/data-provider"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ChoroplethMap } from "@/components/choropleth-map"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { calculateKPIs } from "@/lib/data-service"
 
 // Define columns for the city data table
 const cityColumns: ColumnDef<{
@@ -308,7 +309,7 @@ export default function RegionalAnalysisPage() {
 
   // Filter pincode data by selected city
   const filteredPincodeData = selectedCity 
-    ? regionalData.filter(item => item.city.toLowerCase() === selectedCity.toLowerCase())
+    ? regionalData.filter(item => (item.city || "").toLowerCase() === (selectedCity || "").toLowerCase())
     : regionalData;
 
   // Get the appropriate choropleth data based on the selected metric
@@ -330,70 +331,25 @@ export default function RegionalAnalysisPage() {
 
   // Calculate coverage and penetration for cities using actual data
   const enhancedCityData = !isLoading ? cityRegionalData.map(city => {
-    // Calculate serviceable and listed pincodes for this city
-    const cityData = filteredData.filter(item => item.city.toLowerCase() === city.city.toLowerCase());
-    
-    // Get all unique pincodes for this city
-    const serviceablePincodes = new Set(cityData.map(item => item.pincode));
-    
-    // Get pincodes where products are listed
-    const listedPincodes = new Set();
-    cityData.forEach(item => {
-      if (item.platform) {
-        listedPincodes.add(item.pincode);
-      }
-    });
-    
-    // Get pincodes where products are available
-    const availablePincodes = new Set();
-    cityData.forEach(item => {
-      if (item.stockAvailable) {
-        availablePincodes.add(item.pincode);
-      }
-    });
-    
-    // Calculate penetration = Listed / Serviceable
-    const penetration = serviceablePincodes.size > 0 ? 
-      (listedPincodes.size / serviceablePincodes.size) * 100 : 0;
-    
-    // Calculate availability = Available / Listed (we already have this from the city data)
-    const availability = city.stockAvailability;
-    
-    // Calculate coverage = Penetration * Availability / 100
-    const coverage = (penetration * availability) / 100;
-    
+    const cityData = filteredData.filter(item => (item.city || "").toLowerCase() === (city.city || "").toLowerCase());
+    const metrics = calculateKPIs(cityData);
     return {
       ...city,
-      coverage: parseFloat(coverage.toFixed(1)),
-      penetration: parseFloat(penetration.toFixed(1))
+      coverage: parseFloat(metrics.coverageMethod1.toFixed(1)),
+      penetration: parseFloat(metrics.penetration.toFixed(1)),
+      stockAvailability: parseFloat(metrics.availability.toFixed(1)),
     };
   }) : [];
 
   // Calculate coverage and penetration for pincodes using actual data
   const enhancedPincodeData = !isLoading ? filteredPincodeData.map(pincode => {
-    // Isolate data for this specific pincode
     const pincodeData = filteredData.filter(item => item.pincode === pincode.pincode);
-    
-    // All items with this pincode are considered serviceable
-    const serviceableCount = pincodeData.length;
-    
-    // Count items that are listed on any platform
-    const listedCount = pincodeData.filter(item => item.platform).length;
-    
-    // Calculate penetration = Listed / Serviceable
-    const penetration = serviceableCount > 0 ?
-      (listedCount / serviceableCount) * 100 : 0;
-    
-    // We already have availability from the pincode data
-    const availability = pincode.stockAvailability;
-    
-    // Calculate coverage = Penetration * Availability / 100
-    const coverage = (penetration * availability) / 100;
-    
+    const metrics = calculateKPIs(pincodeData);
     return {
       ...pincode,
-      coverage: parseFloat(coverage.toFixed(1)),
-      penetration: parseFloat(penetration.toFixed(1))
+      coverage: parseFloat(metrics.coverageMethod1.toFixed(1)),
+      penetration: parseFloat(metrics.penetration.toFixed(1)),
+      stockAvailability: parseFloat(metrics.availability.toFixed(1)),
     };
   }) : [];
 

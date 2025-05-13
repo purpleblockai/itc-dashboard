@@ -1,13 +1,35 @@
-# Pinsight E-Commerce Analytics Dashboard
+# E-Commerce Analytics Dashboard
 
-A powerful dashboard for tracking and analyzing e-commerce product data across multiple platforms.
+A comprehensive dashboard for tracking and analyzing e-commerce product data across multiple platforms, providing insights on product availability, penetration, and coverage across various regions.
 
-## New Features
+## Key Features
 
-- MongoDB Integration: Data is now fetched from MongoDB instead of CSV files
-- User Authentication: Login system with role-based access control
-- Client-Based Data Filtering: Users can only view data for their assigned client
-- Admin Registration Page: Admins can register new users and assign them to clients
+- **Advanced Metrics Calculation**: Track penetration, availability, and coverage metrics across e-commerce platforms
+- **Platform Insights**: Compare performance across Swiggy, Flipkart, Zepto, Blinkit, and other platforms
+- **Regional Analysis**: Analyze performance by city and pincode
+- **Brand Evaluation**: Compare metrics across different brands
+- **Responsive Design**: Fully responsive UI that works on all devices
+- **MongoDB Integration**: Data is fetched from MongoDB database
+- **User Authentication**: Role-based access control system
+- **Client-Based Filtering**: Users can only view data for their assigned client
+- **Admin Registration**: Administrators can register new users and assign them to clients
+- **Dark/Light Mode**: Switch between dark and light themes
+
+## Metric Definitions
+
+The dashboard calculates the following key metrics:
+
+- **Penetration**: Listed Pincodes / Serviceable Pincodes
+  - Measures what percentage of serviceable areas have products listed
+  
+- **Availability**: Available Pincodes / Listed Pincodes
+  - Measures what percentage of listed products are actually available for purchase
+  
+- **Coverage Method 1**: Availability % × Penetration %
+  - Combined metric showing overall market presence
+  
+- **Coverage Method 2**: Available Pincodes / Serviceable Pincodes
+  - Direct measure of available products in serviceable areas
 
 ## Environment Setup
 
@@ -27,92 +49,49 @@ NEXTAUTH_URL=http://localhost:3000
 ENABLE_FIRST_USER_ADMIN=true
 ```
 
-## MongoDB Setup
+## Installation and Setup
 
-1. Create a MongoDB database (either locally or using MongoDB Atlas)
-2. Replace the `MONGODB_URI` in your `.env.local` file with your actual connection string
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd E-Com-Dashboard
+   ```
 
-## Initialize Admin User
+2. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   # or
+   pnpm install
+   ```
 
-Run the initialization script to create the admin user:
+3. Set up MongoDB:
+   - Create a MongoDB database (either locally or using MongoDB Atlas)
+   - Replace the `MONGODB_URI` in your `.env.local` file with your connection string
 
-```bash
-node scripts/init-admin.js
-```
+4. Initialize admin user:
+   ```bash
+   node scripts/init-admin.js
+   ```
+   This will create an admin user with:
+   - Username: admin
+   - Password: admin123
+   
+   **Important**: Change the password immediately after first login.
 
-This will create an admin user with the following credentials:
-- Username: admin
-- Password: admin123
+5. Run the development server:
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   # or
+   pnpm dev
+   ```
 
-**Important**: Change the password immediately after first login.
+6. Open [http://localhost:3000](http://localhost:3000) in your browser to access the application.
 
-## MongoDB Data Schema
-
-The application uses the following collections:
-
-### Users Collection
-
-```json
-{
-  "_id": ObjectId,
-  "userId": String,
-  "password": String (hashed),
-  "clientName": String,
-  "role": String (admin or user),
-  "createdAt": Date
-}
-```
-
-### ProductData Collection
-
-```json
-{
-  "_id": ObjectId,
-  "Sn._No": Number,
-  "Report_Date": Date,
-  "Unique_Product_ID": String,
-  "Brand": String,
-  "Client_Name": String,
-  "Name": String,
-  "Quantity": String,
-  "City": String,
-  "Pincode": String,
-  "SKU_ID": String,
-  "Platform": String,
-  "MRP": NumberDouble,
-  "Selling_Price": NumberDouble,
-  "Comp_ID": String,
-  "Availability": String,
-  "Discount": NumberDouble,
-  "Added_To_DB": Date
-}
-```
-
-## Running the Application
-
-Install dependencies:
-
-```bash
-npm install
-# or
-yarn install
-# or
-pnpm install
-```
-
-Run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to access the application.
-
-## Deployment
+## Production Deployment
 
 Build the application for production:
 
@@ -134,60 +113,77 @@ yarn start
 pnpm start
 ```
 
-## Features
+## Data Schema
 
-- **Data Visualization**: Interactive charts and graphs to visualize key metrics
-- **Brand Analysis**: Evaluate brand performance across different platforms
-- **Platform Comparison**: Compare metrics across e-commerce platforms
-- **Regional Insights**: Analyze performance by region and location
-- **Custom Data Import**: Upload your own CSV data for analysis
-- **Responsive Design**: Works on desktop, tablet, and mobile devices
-- **Dark/Light Mode**: Switch between dark and light themes
-- **Export Functionality**: Export data and reports
+The application uses the following MongoDB collections:
 
-## Data Format
+### Users Collection
 
-The dashboard expects CSV data in the following format:
+```json
+{
+  "_id": ObjectId,
+  "userId": String,
+  "password": String (hashed),
+  "clientName": String,
+  "role": String (admin or user),
+  "createdAt": Date
+}
+```
 
-| Field | Description |
-|-------|-------------|
-| Sn. No | Serial number |
-| Report Date | Date of the report (DD-MM-YYYY) |
-| Run Date | Date the report was run (DD-MM-YYYY) |
-| Unique Product ID | Unique identifier for the product |
-| Brand Name | Name of the brand |
-| Category | Product category |
-| Product Description | Description of the product |
-| Quantity | Product quantity |
-| City | City where the product is available |
-| Pincode | Postal code |
-| Area | Specific area within the city |
-| FG Code | Finished goods code |
-| SKU ID | Stock keeping unit ID |
-| Platform | E-commerce platform name |
-| MRP | Maximum retail price |
-| Selling Price | Actual selling price |
-| Stock Availability (Y/N) | Whether the product is in stock |
-| Discount | Discount percentage |
+### ProductData Collection
 
-A sample CSV file is included in the `/public` directory.
+```json
+{
+  "_id": ObjectId,
+  "Sn._No": Number,
+  "Report_Date": Date,
+  "Run_Date": Date,
+  "Unique_Product_ID": String,
+  "Brand": String,
+  "Client_Name": String,
+  "Name": String,
+  "Quantity": String,
+  "City": String,
+  "Pincode": String,
+  "SKU_ID": String,
+  "Platform": String,
+  "MRP": NumberDouble,
+  "Selling_Price": NumberDouble,
+  "Availability": String,
+  "Discount": NumberDouble,
+  "Added_To_DB": Date
+}
+```
 
-## Usage
+## Dashboard Usage
 
-1. **Overview Dashboard**: The main dashboard provides a summary of key metrics and insights.
-2. **Brand Evaluation**: Analyze brand performance, discounts, and availability.
-3. **Platform Insights**: Compare performance across different e-commerce platforms.
-4. **Regional Analysis**: View stock availability by pincode regions and identify geographical trends.
-5. **Settings**: Customize dashboard appearance and configure preferences.
+1. **Login**: Enter your credentials to access the dashboard
+2. **Filter Data**: Use the filter bar to select brand, platform, city, and date range
+3. **Overview Dashboard**: View summary of key metrics
+4. **Platform Insights**: Compare metrics across different e-commerce platforms
+5. **Brand Evaluation**: Analyze brand performance
+6. **Regional Analysis**: Investigate performance by city and pincode
 
 ## Tech Stack
 
-- Next.js 14
-- TypeScript
-- Tailwind CSS
-- Recharts for data visualization
-- shadcn/ui components
-- next-themes for theme switching
+- **Framework**: Next.js 15
+- **Language**: TypeScript
+- **Database**: MongoDB
+- **Authentication**: NextAuth.js
+- **UI Components**: 
+  - shadcn/ui
+  - Tailwind CSS
+  - Radix UI primitive components
+- **Data Visualization**: Recharts
+- **Form Handling**: React Hook Form with Zod validation
+- **Styling**: Tailwind CSS with CSS animations
+- **Theme Switching**: next-themes
+
+## Troubleshooting
+
+- If metrics don't display correctly, check browser console logs for debugging information
+- Ensure MongoDB connection is properly configured
+- Verify that data in the database follows the expected schema
 
 ## License
 

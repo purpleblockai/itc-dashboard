@@ -15,7 +15,8 @@ import {
   getChoroplethData,
   getCityRegionalData,
   getCityChoroplethData,
-  getHeatmapDataByType
+  getHeatmapDataByType,
+  processRow
 } from "@/lib/data-service"
 import { useFilters } from "./filters/filter-provider"
 
@@ -50,6 +51,8 @@ interface DataContextType {
     penetration: number
     availability: number
     coverage: number
+    coverageMethod1: number
+    coverageMethod2: number
     discount: number
     lowestCoverageRegion: {
       name: string
@@ -174,7 +177,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Filter by city
-      if (filters.city && filters.city !== "all" && item.city.toLowerCase() !== filters.city.toLowerCase()) {
+      if (filters.city && filters.city !== "all" && (item.city || "").toLowerCase() !== (filters.city || "").toLowerCase()) {
         return false
       }
 
@@ -266,7 +269,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true)
       const data = await fetchCompetitionData()
-      setRawData(data)
+      // Patch: ensure all data is processed through processRow
+      const processedData = (data as any[]).map(processRow) as ProcessedData[]
+      setRawData(processedData)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Unknown error occurred"))

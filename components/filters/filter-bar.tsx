@@ -113,7 +113,7 @@ export function FilterBar() {
             <SelectValue placeholder="Select Platform" />
           </SelectTrigger>
           <SelectContent>
-            {platforms.map((platform) => (
+            {platforms.filter(platform => platform.value !== "").map((platform) => (
               <SelectItem key={platform.value} value={platform.value}>
                 {platform.label}
               </SelectItem>
@@ -126,7 +126,7 @@ export function FilterBar() {
             <SelectValue placeholder="Select City" />
           </SelectTrigger>
           <SelectContent>
-            {cities.map((city) => (
+            {cities.filter(city => city.value !== "").map((city) => (
               <SelectItem key={city.value} value={city.value}>
                 {city.label}
               </SelectItem>
