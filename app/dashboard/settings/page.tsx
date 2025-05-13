@@ -135,12 +135,9 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <h3 className="text-lg font-medium">NuVR Dashboard</h3>
+              <h3 className="text-lg font-medium">Pinsight Dashboard</h3>
               <p className="text-sm text-muted-foreground">
-                Version 1.0.0
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Built with Next.js, Tailwind CSS, and shadcn/ui
+                Developed by Purple Block Version 1.0.0
               </p>
               <div className="flex gap-2 mt-4">
                 <Button variant="outline" asChild>

@@ -63,7 +63,7 @@ const config = {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        nuvr: {
+        pinsight: {
           orange: "#ff6d00",
           red: "#e53935",
           dark: "#111111",

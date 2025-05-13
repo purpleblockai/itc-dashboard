@@ -256,81 +256,150 @@ export function ScatterChart({
     labelText: item.name, // Store name separately for label use
   }));
 
-  const formatY = valueFormatter?.y || ((value: number) => `${value}%`);
-  const formatX = valueFormatter?.x || ((value: number) => `${value.toFixed(1)}%`);
+  // Get unique categories to color the dots differently
+  const categories = Array.from(new Set(data.map(item => item.category || item.name)));
+
+  // Support both simple formatters and object formatters with x/y properties
+  const formatY = typeof valueFormatter === 'object' && valueFormatter?.y 
+    ? valueFormatter.y 
+    : typeof valueFormatter === 'function' 
+      ? valueFormatter 
+      : ((value: number) => `${value}%`);
+  
+  const formatX = typeof valueFormatter === 'object' && valueFormatter?.x 
+    ? valueFormatter.x 
+    : typeof valueFormatter === 'function' 
+      ? valueFormatter 
+      : ((value: number) => `${value.toFixed(1)}%`);
 
   return (
     <ResponsiveContainer width="100%" height="100%" className={className}>
       <ScatterChartRecharts
         margin={{
-          top: 50,
+          top: 20,
           right: 30,
-          bottom: 40,
-          left: 40,
+          bottom: 50,
+          left: 10,
         }}
       >
-        <CartesianGrid />
+        <CartesianGrid strokeDasharray="5 5" stroke="#555" />
         <XAxis 
           dataKey="x" 
           type="number" 
-          name="discount" 
+          name="penetration" 
           tickFormatter={formatX}
-          tick={{ fontSize: 12 }}
+          tick={{ fontSize: 12, fill: "#fff" }}
           tickLine={{ stroke: "#888" }}
           axisLine={{ stroke: "#888" }}
-          // domain={['dataMin - 2.2', 'dataMax + 1']}
+          domain={[0, 100]}
+          ticks={[0, 25, 50, 75, 100]}
         >
-          <Label value={xAxisLabel} offset={-20} position="insideBottom" style={{ fontSize: '12px', fill: '#666' }} />
+          <Label 
+            value={xAxisLabel} 
+            offset={-20} 
+            position="insideBottom" 
+            style={{ 
+              fontSize: '13px', 
+              fontWeight: 'bold', 
+              fill: '#fff'
+            }} 
+          />
         </XAxis>
         <YAxis
           dataKey="y"
           type="number" 
           name="availability"
           tickFormatter={formatY}
-          tick={{ fontSize: 12 }}
+          tick={{ fontSize: 12, fill: "#fff" }}
           tickLine={{ stroke: "#888" }}
           axisLine={{ stroke: "#888" }}
-          // domain={['dataMin - 31', 'dataMax + 5']}
+          domain={[0, 80]}
+          ticks={[0, 15, 30, 45, 60, 75]}
+          width={80}
         >
-          <Label value={yAxisLabel} angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: '12px', fill: '#666' }} />
+          <Label 
+            value={yAxisLabel} 
+            angle={-90} 
+            position="insideLeft" 
+            style={{ 
+              textAnchor: 'middle', 
+              fontSize: '13px', 
+              fontWeight: 'bold', 
+              fill: '#fff'
+            }} 
+          />
         </YAxis>
         <Tooltip
           cursor={{ strokeDasharray: '3 3' }}
-          contentStyle={{ borderRadius: "6px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" }}
+          contentStyle={{ 
+            backgroundColor: "#333", 
+            border: "1px solid #666", 
+            borderRadius: "4px", 
+            color: "#fff",
+            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)",
+            padding: "10px"
+          }}
+          itemStyle={{ color: "#fff", fontSize: "12px" }}
+          labelStyle={{ fontWeight: "bold", color: "#fff", marginBottom: "5px" }}
           formatter={(value: any, name: string) => {
-            if (name === 'discount') return [formatX(value), 'Discount'];
+            if (name === 'penetration') return [formatX(value), 'Penetration'];
             if (name === 'availability') return [formatY(value), 'Availability'];
-            if (name === sizeKey) return [value, 'SKU Count'];
+            if (name === sizeKey) return [value.toFixed(1) + '%', 'Coverage'];
             return [value, name];
           }}
         />
-        {showLegend && <Legend />}
-        <Scatter
-          name="Brands"
-          data={enhancedData}
-          fill={colors[0]}
-          shape={(props: any) => <Size {...props} dataKey={sizeKey} scale={sizeScale} color={colors[0]} />}
-        >
-          <LabelList
-            dataKey="labelText"
-            position="top"
-            offset={25}
-            style={{
-              fontSize: 12,
-              fill: '#333',
-              fontWeight: 700,
-              // textShadow: '0 0 5px white, 0 0 5px white, 0 0 5px white, 0 0 5px white',
-              backgroundColor: 'rgba(255, 255, 255, 0.7)',
-              padding: '2px'
-            }}
+        {showLegend && 
+          <Legend 
+            layout="horizontal" 
+            verticalAlign="top" 
+            iconType="circle"
+            iconSize={10}
+            wrapperStyle={{ top: 10, right: 10 }} 
           />
-        </Scatter>
+        }
+        
+        {/* Group data by category and create a separate Scatter for each category */}
+        {categories.map((category, index) => {
+          const categoryData = enhancedData.filter(
+            item => (item.category || item.name) === category
+          );
+          const color = colors[index % colors.length];
+          
+          return (
+            <Scatter
+              key={category}
+              name={category}
+              data={categoryData}
+              fill={color}
+              shape={(props: any) => (
+                <Size 
+                  {...props} 
+                  dataKey={sizeKey} 
+                  scale={sizeScale} 
+                  color={color} 
+                />
+              )}
+            >
+              <LabelList
+                dataKey="labelText"
+                position="bottom"
+                offset={15}
+                style={{
+                  fontSize: 13,
+                  fill: '#fff',
+                  fontWeight: 600,
+                  textShadow: '0 0 4px #000, 0 0 4px #000'
+                }}
+              />
+            </Scatter>
+          );
+        })}
       </ScatterChartRecharts>
     </ResponsiveContainer>
   );
 }
 
-// Improved Size component with better scaling and appearance
+// Improved Size component with better visibility
 const Size = ({ 
   payload, 
   cx, 
@@ -349,7 +418,7 @@ const Size = ({
   if (!payload || !cx || !cy) return null;
   
   let value = payload[dataKey] || 1;
-  let minR = 8, maxR = 30;
+  let minR = 15, maxR = 40;
   let minVal = scale[0], maxVal = scale[1];
   
   // Use sqrt scale for more natural area representation
@@ -364,9 +433,9 @@ const Size = ({
         cy={cy} 
         r={radius} 
         fill={color} 
-        fillOpacity={0.85} 
-        stroke="#333"
-        strokeWidth={1} 
+        fillOpacity={0.8} 
+        stroke="#fff"
+        strokeWidth={2} 
       />
     </g>
   );

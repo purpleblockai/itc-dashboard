@@ -20,6 +20,8 @@ const cityColumns: ColumnDef<{
   stockAvailability: number
   stockOutPercent: number
   pincodeCount: number
+  coverage?: number
+  penetration?: number
 }>[] = [
   {
     accessorKey: "city",
@@ -39,6 +41,64 @@ const cityColumns: ColumnDef<{
     cell: ({ row }) => {
       const count = row.getValue("pincodeCount") as number
       return <span>{count}</span>
+    },
+  },
+  {
+    accessorKey: "coverage",
+    header: ({ column }) => (
+      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+        Coverage %
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      const value = row.getValue("coverage") as number || 0
+      return (
+        <div className="flex items-center">
+          <div
+            className="mr-2 h-3 w-20 rounded-full bg-muted overflow-hidden"
+            role="progressbar"
+            aria-valuenow={value}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className={`h-full ${value > 90 ? "bg-green-500" : value > 80 ? "bg-yellow-500" : "bg-red-500"}`}
+              style={{ width: `${value}%` }}
+            />
+          </div>
+          <span className="font-medium">{value}%</span>
+        </div>
+      )
+    },
+  },
+  {
+    accessorKey: "penetration",
+    header: ({ column }) => (
+      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+        Penetration %
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      const value = row.getValue("penetration") as number || 0
+      return (
+        <div className="flex items-center">
+          <div
+            className="mr-2 h-3 w-20 rounded-full bg-muted overflow-hidden"
+            role="progressbar"
+            aria-valuenow={value}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className={`h-full ${value > 90 ? "bg-green-500" : value > 80 ? "bg-yellow-500" : "bg-red-500"}`}
+              style={{ width: `${value}%` }}
+            />
+          </div>
+          <span className="font-medium">{value}%</span>
+        </div>
+      )
     },
   },
   {
@@ -71,32 +131,6 @@ const cityColumns: ColumnDef<{
     },
   },
   {
-    accessorKey: "stockOutPercent",
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        Stock-out %
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
-    cell: ({ row }) => {
-      const value = row.getValue("stockOutPercent") as number
-      return (
-        <Badge
-          variant="outline"
-          className={`${
-            value < 10
-              ? "badge-change-positive"
-              : value < 20
-                ? "badge-change-neutral"
-                : "badge-change-negative"
-          } font-medium`}
-        >
-          {value}%
-        </Badge>
-      )
-    },
-  },
-  {
     id: "actions",
     cell: ({ row }) => {
       return (
@@ -115,6 +149,8 @@ const pincodeColumns: ColumnDef<{
   area?: string
   stockAvailability: number
   stockOutPercent: number
+  coverage?: number
+  penetration?: number
 }>[] = [
   {
     accessorKey: "pincode",
@@ -138,6 +174,64 @@ const pincodeColumns: ColumnDef<{
     cell: ({ row }) => {
       const area = row.getValue("area") as string
       return area ? area : "-"
+    },
+  },
+  {
+    accessorKey: "coverage",
+    header: ({ column }) => (
+      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+        Coverage %
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      const value = row.getValue("coverage") as number || 0
+      return (
+        <div className="flex items-center">
+          <div
+            className="mr-2 h-3 w-20 rounded-full bg-muted overflow-hidden"
+            role="progressbar"
+            aria-valuenow={value}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className={`h-full ${value > 90 ? "bg-green-500" : value > 80 ? "bg-yellow-500" : "bg-red-500"}`}
+              style={{ width: `${value}%` }}
+            />
+          </div>
+          <span className="font-medium">{value}%</span>
+        </div>
+      )
+    },
+  },
+  {
+    accessorKey: "penetration",
+    header: ({ column }) => (
+      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+        Penetration %
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      const value = row.getValue("penetration") as number || 0
+      return (
+        <div className="flex items-center">
+          <div
+            className="mr-2 h-3 w-20 rounded-full bg-muted overflow-hidden"
+            role="progressbar"
+            aria-valuenow={value}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className={`h-full ${value > 90 ? "bg-green-500" : value > 80 ? "bg-yellow-500" : "bg-red-500"}`}
+              style={{ width: `${value}%` }}
+            />
+          </div>
+          <span className="font-medium">{value}%</span>
+        </div>
+      )
     },
   },
   {
@@ -198,14 +292,110 @@ const pincodeColumns: ColumnDef<{
 ];
 
 export default function RegionalAnalysisPage() {
-  const { isLoading, regionalData, choroplethData, cityRegionalData, cityChoroplethData } = useData()
+  const { 
+    isLoading, 
+    regionalData, 
+    choroplethData, 
+    cityRegionalData, 
+    cityChoroplethData, 
+    coverageChoroplethData, 
+    penetrationChoroplethData, 
+    filteredData 
+  } = useData()
   const [selectedCity, setSelectedCity] = useState<string | null>(null)
   const [viewType, setViewType] = useState<"city" | "pincode">("city")
+  const [heatmapType, setHeatmapType] = useState<"availability" | "coverage" | "penetration">("availability")
 
   // Filter pincode data by selected city
   const filteredPincodeData = selectedCity 
     ? regionalData.filter(item => item.city.toLowerCase() === selectedCity.toLowerCase())
     : regionalData;
+
+  // Get the appropriate choropleth data based on the selected metric
+  const getActiveHeatmapData = () => {
+    if (viewType === "pincode") {
+      return choroplethData;
+    }
+    
+    // Choose the correct dataset based on the metric type
+    switch (heatmapType) {
+      case "coverage":
+        return coverageChoroplethData;
+      case "penetration":
+        return penetrationChoroplethData;
+      default:
+        return cityChoroplethData;
+    }
+  };
+
+  // Calculate coverage and penetration for cities using actual data
+  const enhancedCityData = !isLoading ? cityRegionalData.map(city => {
+    // Calculate serviceable and listed pincodes for this city
+    const cityData = filteredData.filter(item => item.city.toLowerCase() === city.city.toLowerCase());
+    
+    // Get all unique pincodes for this city
+    const serviceablePincodes = new Set(cityData.map(item => item.pincode));
+    
+    // Get pincodes where products are listed
+    const listedPincodes = new Set();
+    cityData.forEach(item => {
+      if (item.platform) {
+        listedPincodes.add(item.pincode);
+      }
+    });
+    
+    // Get pincodes where products are available
+    const availablePincodes = new Set();
+    cityData.forEach(item => {
+      if (item.stockAvailable) {
+        availablePincodes.add(item.pincode);
+      }
+    });
+    
+    // Calculate penetration = Listed / Serviceable
+    const penetration = serviceablePincodes.size > 0 ? 
+      (listedPincodes.size / serviceablePincodes.size) * 100 : 0;
+    
+    // Calculate availability = Available / Listed (we already have this from the city data)
+    const availability = city.stockAvailability;
+    
+    // Calculate coverage = Penetration * Availability / 100
+    const coverage = (penetration * availability) / 100;
+    
+    return {
+      ...city,
+      coverage: parseFloat(coverage.toFixed(1)),
+      penetration: parseFloat(penetration.toFixed(1))
+    };
+  }) : [];
+
+  // Calculate coverage and penetration for pincodes using actual data
+  const enhancedPincodeData = !isLoading ? filteredPincodeData.map(pincode => {
+    // Isolate data for this specific pincode
+    const pincodeData = filteredData.filter(item => item.pincode === pincode.pincode);
+    
+    // All items with this pincode are considered serviceable
+    const serviceableCount = pincodeData.length;
+    
+    // Count items that are listed on any platform
+    const listedCount = pincodeData.filter(item => item.platform).length;
+    
+    // Calculate penetration = Listed / Serviceable
+    const penetration = serviceableCount > 0 ?
+      (listedCount / serviceableCount) * 100 : 0;
+    
+    // We already have availability from the pincode data
+    const availability = pincode.stockAvailability;
+    
+    // Calculate coverage = Penetration * Availability / 100
+    const coverage = (penetration * availability) / 100;
+    
+    return {
+      ...pincode,
+      coverage: parseFloat(coverage.toFixed(1)),
+      penetration: parseFloat(penetration.toFixed(1))
+    };
+  }) : [];
 
   const handleCityRowClick = (city: string) => {
     setSelectedCity(city);
@@ -238,14 +428,41 @@ export default function RegionalAnalysisPage() {
           <div className="grid gap-8">
             <Card className="card-hover">
               <CardHeader className="pb-3">
-                <CardTitle className="text-xl dashboard-text">
-                  {viewType === "city" ? "City-wise Heatmap" : `Pincode Heatmap: ${selectedCity}`}
-                </CardTitle>
-                <CardDescription>
-                  {viewType === "city" 
-                    ? "Geographical distribution of stock availability across cities" 
-                    : "Detailed pincode view for the selected city"}
-                </CardDescription>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="text-xl dashboard-text">
+                      {viewType === "city" ? "City-wise Heatmap" : `Pincode Heatmap: ${selectedCity}`}
+                    </CardTitle>
+                    <CardDescription>
+                      {viewType === "city" 
+                        ? "Geographical distribution across cities" 
+                        : "Detailed pincode view for the selected city"}
+                    </CardDescription>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button 
+                      variant={heatmapType === "availability" ? "default" : "outline"} 
+                      size="sm"
+                      onClick={() => setHeatmapType("availability")}
+                    >
+                      Availability
+                    </Button>
+                    <Button 
+                      variant={heatmapType === "coverage" ? "default" : "outline"} 
+                      size="sm"
+                      onClick={() => setHeatmapType("coverage")}
+                    >
+                      Coverage
+                    </Button>
+                    <Button 
+                      variant={heatmapType === "penetration" ? "default" : "outline"} 
+                      size="sm"
+                      onClick={() => setHeatmapType("penetration")}
+                    >
+                      Penetration
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -254,7 +471,7 @@ export default function RegionalAnalysisPage() {
                   </div>
                 ) : (
                   viewType === "city" ? (
-                    <ChoroplethMap data={cityChoroplethData} height={450} />
+                    <ChoroplethMap data={getActiveHeatmapData()} height={450} heatmapType={heatmapType} />
                   ) : (
                     <>
                       <div className="mb-4">
@@ -268,7 +485,7 @@ export default function RegionalAnalysisPage() {
                           Back to Cities
                         </Button>
                       </div>
-                      <ChoroplethMap data={choroplethData} height={450} />
+                      <ChoroplethMap data={choroplethData} height={450} heatmapType={heatmapType} />
                     </>
                   )
                 )}
@@ -312,7 +529,7 @@ export default function RegionalAnalysisPage() {
               ) : viewType === "city" ? (
                 <DataTable
                   columns={cityColumns}
-                  data={cityRegionalData}
+                  data={enhancedCityData}
                   searchKey="city"
                   searchPlaceholder="Search by city..."
                   onRowClick={(row) => handleCityRowClick(row.city)}
@@ -320,7 +537,7 @@ export default function RegionalAnalysisPage() {
               ) : (
                 <DataTable
                   columns={pincodeColumns}
-                  data={filteredPincodeData}
+                  data={enhancedPincodeData}
                   searchKey="pincode"
                   searchPlaceholder="Search by pincode..."
                 />

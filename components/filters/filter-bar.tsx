@@ -13,6 +13,7 @@ import { Icons } from "@/components/icons"
 import { useFilters } from "./filter-provider"
 import { useData } from "@/components/data-provider"
 import { getUniqueValues } from "@/lib/data-service"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 
 export function FilterBar() {
   const { filters, setFilters, resetFilters } = useFilters()
@@ -178,9 +179,15 @@ export function FilterBar() {
           <X className="mr-2 h-4 w-4" />
           Reset
         </Button>
-        <Button size="sm" className="h-9 bg-nuvr-orange hover:bg-nuvr-orange/90" disabled={isLoading}>
-          <Icons.filter className="mr-2 h-4 w-4" />
-          Apply Filters
+        <Button size="sm" className="h-9 bg-pinsight-orange hover:bg-pinsight-orange/90" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
+              Loading...
+            </>
+          ) : (
+            "Apply Filters"
+          )}
         </Button>
       </div>
     </div>

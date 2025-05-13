@@ -17,9 +17,10 @@ import { ScatterChart, BarChart } from "@/components/ui/chart";
 import { useData } from "@/components/data-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect } from "react";
+import { ProcessedData } from "@/lib/data-service";
 
 export default function BrandEvaluationPage() {
-  const { isLoading, brandData: initialBrandData, productData } = useData();
+  const { isLoading, brandData: initialBrandData, productData, filteredData } = useData();
 
   console.log("Sample productData:", productData.slice(0, 10));
   console.log("isLoading:", isLoading);
@@ -61,10 +62,25 @@ export default function BrandEvaluationPage() {
           availabilities.length
         : 0;
 
+      // Calculate penetration metrics
+      const penetrations = items
+        .map((p: any) => parseFloat(p.penetration as any))
+        .filter((v: number) => !isNaN(v) && isFinite(v));
+
+      const avgPenetration = penetrations.length
+        ? penetrations.reduce((a: number, b: number) => a + b, 0) /
+          penetrations.length
+        : 0;
+
+      // Calculate coverage metrics (penetration * availability / 100)
+      const avgCoverage = (avgPenetration * avgAvailability) / 100;
+
       return {
         name: brand,
         avgDiscount,
         availability: avgAvailability,
+        penetration: avgPenetration,
+        coverage: avgCoverage,
         skuCount: items.length,
       };
     });
@@ -85,6 +101,9 @@ export default function BrandEvaluationPage() {
     mrp: number | null;
     sellingPrice: number | null;
     availability: number;
+    coverage?: number;
+    penetration?: number;
+    discount?: number;
   }>[] = [
     {
       accessorKey: "brand",
@@ -121,9 +140,15 @@ export default function BrandEvaluationPage() {
       },
     },
     {
-      id: "discount",
-      header: "Discount",
+      accessorKey: "discount",
+      header: "Discount %",
       cell: ({ row }) => {
+        const discountVal = row.getValue("discount");
+        if (discountVal !== undefined && discountVal !== null) {
+          const discount = typeof discountVal === "string" ? parseFloat(discountVal) : (discountVal as number);
+          return <span>{!isNaN(discount) ? discount.toFixed(1) + "%" : "-"}</span>;
+        }
+          
         const mrpRaw = row.getValue("mrp");
         const spRaw = row.getValue("sellingPrice");
         const mrp =
@@ -139,13 +164,95 @@ export default function BrandEvaluationPage() {
       },
     },
     {
+      accessorKey: "coverage",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Coverage %
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const raw = row.getValue("coverage") as any;
+        const value =
+          typeof raw === "string" ? parseFloat(raw) : (raw as number);
+        const pct = !isNaN(value) ? value : 0;
+        return (
+          <div className="flex items-center">
+            <div
+              className="mr-2 h-2 w-16 rounded-full bg-muted overflow-hidden"
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className={`h-full ${
+                  pct > 90
+                    ? "bg-green-500"
+                    : pct > 80
+                    ? "bg-yellow-500"
+                    : "bg-red-500"
+                }`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span>{pct.toFixed(1)}%</span>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "penetration",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Penetration %
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const raw = row.getValue("penetration") as any;
+        const value =
+          typeof raw === "string" ? parseFloat(raw) : (raw as number);
+        const pct = !isNaN(value) ? value : 0;
+        return (
+          <div className="flex items-center">
+            <div
+              className="mr-2 h-2 w-16 rounded-full bg-muted overflow-hidden"
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className={`h-full ${
+                  pct > 90
+                    ? "bg-green-500"
+                    : pct > 80
+                    ? "bg-yellow-500"
+                    : "bg-red-500"
+                }`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span>{pct.toFixed(1)}%</span>
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: "availability",
       header: ({ column }) => (
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-          Availability
+          Availability %
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
@@ -181,13 +288,22 @@ export default function BrandEvaluationPage() {
     },
   ];
 
-  // Transform brand data for scatter plot
-  const scatterData = brandData.map((brand) => ({
+  // Transform brand data for scatter plot with availability on y-axis and penetration on x-axis
+  const scatterData = !isLoading ? brandData.map(brand => {
+    return {
+      name: brand.name,
+      x: brand.penetration || 0, // Penetration on x-axis
+      y: brand.availability || 0, // Availability on y-axis
+      size: brand.coverage || 0, // Size represents coverage
+      category: brand.name
+    };
+  }) : [];
+
+  // Update the coverage by brand data to use actual coverage values from brand data
+  const coverageByBrandData = !isLoading ? brandData.map(brand => ({
     name: brand.name,
-    x: brand.avgDiscount,
-    y: brand.availability,
-    size: brand.skuCount,
-  }));
+    coverage: brand.coverage || 0 // Use the actual coverage value
+  })).sort((a, b) => b.coverage - a.coverage) : [];
 
   // Helper to get unique brands and products
   function getUniqueBrandsAndProducts(productData: any[]) {
@@ -311,11 +427,13 @@ export default function BrandEvaluationPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Brand Evaluation</h2>
+        <h2 className="text-3xl font-bold tracking-tight dashboard-text">
+          Brand Evaluation
+        </h2>
         <p className="text-muted-foreground">
-          Analyze brand performance across discount and availability metrics
+          Analyze brand metrics and product performance
         </p>
       </div>
 
@@ -323,89 +441,79 @@ export default function BrandEvaluationPage() {
 
       <FilterBar />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="card-hover col-span-2 h-[500px]">
+      <div className="grid gap-8 md:grid-cols-2">
+        {/* Graph 1: Scatter plot—Availability on y, Penetration on x, dot size = Coverage */}
+        <Card className="card-hover md:col-span-2">
           <CardHeader>
-            <CardTitle>Brand Performance Matrix</CardTitle>
+            <CardTitle>Brand Availability vs Penetration</CardTitle>
             <CardDescription>
-              Positioning map of brands by discount percentage and product
-              availability
+              Average availability on y-axis, average penetration on x-axis, dot size represents coverage
             </CardDescription>
           </CardHeader>
           <CardContent className="h-[400px]">
             {isLoading ? (
               <Skeleton className="h-full w-full" />
-            ) : (
+            ) : scatterData && scatterData.length > 0 ? (
               <ScatterChart
                 data={scatterData}
-                xAxisLabel="Average Discount (%)"
-                yAxisLabel="Availability (%)"
+                xAxisLabel="Average Penetration (%)"
+                yAxisLabel="Average Availability (%)"
                 sizeKey="size"
-                sizeScale={[1, 100]}
-                colors={["#ff6d00"]}
+                sizeScale={[10, 80]}
+                colors={["#FF6D00", "#2196F3", "#00C49F", "#FFBB28", "#9C27B0", "#FF7675"]}
                 valueFormatter={{
                   x: (value: number) => `${value.toFixed(1)}%`,
-                  y: (value: number) => `${value.toFixed(1)}%`,
+                  y: (value: number) => `${value.toFixed(1)}%`
                 }}
+                showLegend={true}
                 className="h-full"
               />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-muted-foreground">No data available</p>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="card-hover">
+        {/* Graph 3: "Coverage by Brand" */}
+        <Card className="card-hover md:col-span-2">
           <CardHeader>
-            <CardTitle>Discount Comparison</CardTitle>
+            <CardTitle>Coverage by Brand</CardTitle>
             <CardDescription>
-              Average discount percentage by brand
+              Brand coverage percentage comparison (Availability × Penetration)
             </CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="h-[350px]">
             {isLoading ? (
               <Skeleton className="h-full w-full" />
-            ) : (
+            ) : coverageByBrandData.length > 0 ? (
               <BarChart
-                data={brandData.sort((a, b) => b.avgDiscount - a.avgDiscount)}
-                categories={["avgDiscount"]}
+                data={coverageByBrandData}
+                categories={["coverage"]}
                 index="name"
-                colors={["#ff6d00"]}
+                colors={["#00c49f"]}
                 valueFormatter={(value: number) => `${value.toFixed(1)}%`}
                 showLegend={false}
+                showGridLines={true}
                 className="h-full"
+                xAxisLabel="Brand"
+                yAxisLabel="Coverage %"
               />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-muted-foreground">No data available</p>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="card-hover">
-          <CardHeader>
-            <CardTitle>Availability Comparison</CardTitle>
-            <CardDescription>
-              Product availability percentage by brand
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="h-[300px]">
-            {isLoading ? (
-              <Skeleton className="h-full w-full" />
-            ) : (
-              <BarChart
-                data={brandData.sort((a, b) => b.availability - a.availability)}
-                categories={["availability"]}
-                index="name"
-                colors={["#22c55e"]}
-                valueFormatter={(value: number) => `${value.toFixed(1)}%`}
-                showLegend={false}
-                className="h-full"
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="card-hover col-span-2">
+        {/* Brand Products Table */}
+        <Card className="card-hover md:col-span-2">
           <CardHeader>
             <CardTitle>Brand Products</CardTitle>
             <CardDescription>
-              Detailed product listings across all tracked brands
+              Detailed metrics for individual products
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -414,9 +522,67 @@ export default function BrandEvaluationPage() {
             ) : (
               <DataTable
                 columns={columns}
-                data={productData}
+                data={productData.map(p => {
+                  // Calculate discount from actual mrp and selling price
+                  const discount = p.mrp && p.sellingPrice ? 
+                    parseFloat((((p.mrp - p.sellingPrice) / p.mrp) * 100).toFixed(1)) : 
+                    undefined;
+                  
+                  // Get all data for this product to calculate coverage and penetration
+                  const productItems = filteredData.filter((item: ProcessedData) => 
+                    item.productId === p.brand + '_' + p.name || // Try a common product ID pattern
+                    item.productDescription === p.name // Or match by description
+                  );
+                  
+                  // If no matching items found, use the existing availability value
+                  if (productItems.length === 0) {
+                    return {
+                      ...p,
+                      coverage: 0,
+                      penetration: 0,
+                      discount
+                    };
+                  }
+                  
+                  // Get all unique pincodes for this product (serviceable)
+                  const serviceablePincodes = new Set(productItems.map((item: ProcessedData) => item.pincode));
+                  
+                  // Get pincodes where this product is listed
+                  const listedPincodes = new Set();
+                  productItems.forEach((item: ProcessedData) => {
+                    if (item.platform) {
+                      listedPincodes.add(item.pincode);
+                    }
+                  });
+                  
+                  // Get pincodes where this product is available
+                  const availablePincodes = new Set();
+                  productItems.forEach((item: ProcessedData) => {
+                    if (item.stockAvailable) {
+                      availablePincodes.add(item.pincode);
+                    }
+                  });
+                  
+                  // Calculate penetration = Listed / Serviceable
+                  const penetration = serviceablePincodes.size > 0 ?
+                    (listedPincodes.size / serviceablePincodes.size) * 100 : 0;
+                  
+                  // Calculate availability = Available / Listed
+                  const availability = listedPincodes.size > 0 ?
+                    (availablePincodes.size / listedPincodes.size) * 100 : 0;
+                  
+                  // Calculate coverage = Penetration * Availability / 100
+                  const coverage = (penetration * availability) / 100;
+                  
+                  return {
+                    ...p,
+                    coverage: parseFloat(coverage.toFixed(1)),
+                    penetration: parseFloat(penetration.toFixed(1)),
+                    availability: parseFloat(availability.toFixed(1)),
+                    discount
+                  };
+                })}
                 pageSize={10}
-                exportFilename="brand-products-export"
               />
             )}
           </CardContent>

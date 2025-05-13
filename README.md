@@ -1,6 +1,138 @@
-# Nuvr E-Commerce Analytics Dashboard
+# Pinsight E-Commerce Analytics Dashboard
 
-A comprehensive dashboard for e-commerce analytics that provides insights into brand performance, platform comparison, and regional analysis.
+A powerful dashboard for tracking and analyzing e-commerce product data across multiple platforms.
+
+## New Features
+
+- MongoDB Integration: Data is now fetched from MongoDB instead of CSV files
+- User Authentication: Login system with role-based access control
+- Client-Based Data Filtering: Users can only view data for their assigned client
+- Admin Registration Page: Admins can register new users and assign them to clients
+
+## Environment Setup
+
+Create a `.env.local` file in the root directory with the following variables:
+
+```
+# MongoDB Connection String
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/your-database?retryWrites=true&w=majority
+
+# NextAuth Secret
+NEXTAUTH_SECRET=your-nextauth-secret-key
+
+# Optional - The base URL of your site
+NEXTAUTH_URL=http://localhost:3000
+
+# Set to true to enable admin access when creating the first user
+ENABLE_FIRST_USER_ADMIN=true
+```
+
+## MongoDB Setup
+
+1. Create a MongoDB database (either locally or using MongoDB Atlas)
+2. Replace the `MONGODB_URI` in your `.env.local` file with your actual connection string
+
+## Initialize Admin User
+
+Run the initialization script to create the admin user:
+
+```bash
+node scripts/init-admin.js
+```
+
+This will create an admin user with the following credentials:
+- Username: admin
+- Password: admin123
+
+**Important**: Change the password immediately after first login.
+
+## MongoDB Data Schema
+
+The application uses the following collections:
+
+### Users Collection
+
+```json
+{
+  "_id": ObjectId,
+  "userId": String,
+  "password": String (hashed),
+  "clientName": String,
+  "role": String (admin or user),
+  "createdAt": Date
+}
+```
+
+### ProductData Collection
+
+```json
+{
+  "_id": ObjectId,
+  "Sn._No": Number,
+  "Report_Date": Date,
+  "Unique_Product_ID": String,
+  "Brand": String,
+  "Client_Name": String,
+  "Name": String,
+  "Quantity": String,
+  "City": String,
+  "Pincode": String,
+  "SKU_ID": String,
+  "Platform": String,
+  "MRP": NumberDouble,
+  "Selling_Price": NumberDouble,
+  "Comp_ID": String,
+  "Availability": String,
+  "Discount": NumberDouble,
+  "Added_To_DB": Date
+}
+```
+
+## Running the Application
+
+Install dependencies:
+
+```bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+```
+
+Run the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to access the application.
+
+## Deployment
+
+Build the application for production:
+
+```bash
+npm run build
+# or
+yarn build
+# or
+pnpm build
+```
+
+Start the production server:
+
+```bash
+npm start
+# or
+yarn start
+# or
+pnpm start
+```
 
 ## Features
 
@@ -12,37 +144,6 @@ A comprehensive dashboard for e-commerce analytics that provides insights into b
 - **Responsive Design**: Works on desktop, tablet, and mobile devices
 - **Dark/Light Mode**: Switch between dark and light themes
 - **Export Functionality**: Export data and reports
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18.18.0 or higher
-- npm or pnpm
-
-### Installation
-
-1. Clone the repository
-```bash
-git clone https://github.com/your-username/nuvr-dashboard.git
-cd nuvr-dashboard
-```
-
-2. Install dependencies
-```bash
-npm install
-# or
-pnpm install
-```
-
-3. Run the development server
-```bash
-npm run dev
-# or
-pnpm dev
-```
-
-4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the dashboard.
 
 ## Data Format
 

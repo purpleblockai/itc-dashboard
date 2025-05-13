@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   Sidebar,
   SidebarContent,
@@ -19,9 +20,19 @@ import { Button } from "@/components/ui/button";
 import { ThemeSwitch } from "./theme-switch";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+// Define type for the user with additional properties
+interface ExtendedUser {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string;
+  clientName?: string;
+}
+
 export function DashboardSidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { data: session } = useSession();
   const {
     setOpen,
     toggleSidebar: toggleContextSidebar,
@@ -36,6 +47,10 @@ export function DashboardSidebar() {
   const toggleSidebar = () => {
     setOpen(!open);
   };
+
+  // Cast the user to our extended type
+  const user = session?.user as ExtendedUser | undefined;
+  const isAdmin = user?.role === "admin";
 
   return (
     <div className="relative">
@@ -53,9 +68,9 @@ export function DashboardSidebar() {
               state === "collapsed" ? "justify-center" : "space-x-2"
             }`}
           >
-            <Icons.logo className="h-8 w-8 text-nuvr-orange" />
+            <Icons.logo className="h-8 w-8 text-pinsight-orange" />
             {!(state === "collapsed") && (
-              <span className="text-xl font-bold text-foreground">Nuvr</span>
+              <span className="text-xl font-bold text-foreground">Pinsight</span>
             )}
           </div>
         </SidebarHeader>
@@ -133,6 +148,49 @@ export function DashboardSidebar() {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            
+            {isAdmin && (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive("/dashboard/register")}
+                >
+                  <Link
+                    href="/dashboard/register"
+                    className={`flex ${
+                      state === "collapsed" ? "justify-center" : "justify-start"
+                    } text-foreground hover:text-foreground`}
+                  >
+                    <Icons.userPlus className="h-5 w-5" />
+                    {!(state === "collapsed") && (
+                      <span className="ml-2">Register Users</span>
+                    )}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+            
+            {isAdmin && (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive("/dashboard/set-client")}
+                >
+                  <Link
+                    href="/dashboard/set-client"
+                    className={`flex ${
+                      state === "collapsed" ? "justify-center" : "justify-start"
+                    } text-foreground hover:text-foreground`}
+                  >
+                    <Icons.user className="h-5 w-5" />
+                    {!(state === "collapsed") && (
+                      <span className="ml-2">Assign Client</span>
+                    )}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+            
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
@@ -168,7 +226,7 @@ export function DashboardSidebar() {
             } w-full text-foreground`}
             asChild
           >
-            <Link href="/login">
+            <Link href="/api/auth/signout">
               <Icons.logout
                 className={state === "collapsed" ? "" : "mr-2"}
                 size={16}

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useEffect, useState } from "react"
+import { useSession } from "next-auth/react"
 import {
   fetchCompetitionData,
   type ProcessedData,
@@ -13,9 +14,19 @@ import {
   getProductData,
   getChoroplethData,
   getCityRegionalData,
-  getCityChoroplethData
+  getCityChoroplethData,
+  getHeatmapDataByType
 } from "@/lib/data-service"
 import { useFilters } from "./filters/filter-provider"
+
+// Define extended user type to include role and clientName
+interface ExtendedUser {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string;
+  clientName?: string;
+}
 
 interface DataContextType {
   isLoading: boolean
@@ -29,6 +40,34 @@ interface DataContextType {
     stockOutPercentage: number
     stockOutDelta: number
     avgDiscountDelta: number
+    competitorCoverage: number
+    totalSKUs: number
+    serviceableSKUs: number
+    listedSKUs: number
+    availableSKUs: number
+    notAvailableSKUs?: number
+    skuTracks: number
+    penetration: number
+    availability: number
+    coverage: number
+    discount: number
+    lowestCoverageRegion: {
+      name: string
+      value: number
+      delta: number
+      competitorCoverage: number
+    }
+    highestAvailabilityDeltaRegion: {
+      name: string
+      value: number
+      delta: number
+    }
+    highestAvailabilityDeltaFromCompetitors: {
+      name: string
+      value: number
+      competitors: number
+      delta: number
+    }
   }
   timeSeriesData: { date: string; value: number }[]
   regionalData: {
@@ -43,6 +82,8 @@ interface DataContextType {
     stockOutPercent: number
     pincodeCount: number
     pincodes: string[]
+    coverage?: number
+    penetration?: number
   }[]
   platformData: {
     name: string
@@ -59,6 +100,8 @@ interface DataContextType {
     name: string
     avgDiscount: number
     availability: number
+    penetration?: number
+    coverage?: number
     skuCount: number
     products: {
       name: string
@@ -83,6 +126,16 @@ interface DataContextType {
     city: string
     value: number
   }[]
+  coverageChoroplethData: {
+    id: string
+    city: string
+    value: number
+  }[]
+  penetrationChoroplethData: {
+    id: string
+    city: string
+    value: number
+  }[]
   refreshData: () => void
 }
 
@@ -93,12 +146,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<Error | null>(null)
   const [rawData, setRawData] = useState<ProcessedData[]>([])
   const { filters } = useFilters()
+  const { data: session } = useSession()
+  
+  // Get user information
+  const user = session?.user as ExtendedUser | undefined;
+  const isAdmin = user?.role === "admin";
+  const userClientName = user?.clientName;
 
-  // Filter data based on selected filters
+  // Filter data based on selected filters and user's client
   const filteredData = React.useMemo(() => {
     if (!rawData.length) return []
 
     return rawData.filter((item) => {
+      // For non-admin users, filter by their assigned client
+      if (!isAdmin && userClientName && item.clientName && item.clientName !== userClientName) {
+        return false;
+      }
+      
       // Filter by brand
       if (filters.brand && filters.brand !== "all" && item.brand !== filters.brand) {
         return false
@@ -139,10 +203,43 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
       return true
     })
-  }, [rawData, filters])
+  }, [rawData, filters, isAdmin, userClientName])
 
-  // Calculate derived data
-  const kpis = React.useMemo(() => calculateKPIs(filteredData), [filteredData])
+  // Filter data only by client for non-admin users (for key insights)
+  const clientFilteredData = React.useMemo(() => {
+    if (!rawData.length) return []
+
+    return rawData.filter((item) => {
+      // For non-admin users, filter by their assigned client
+      if (!isAdmin && userClientName && item.clientName && item.clientName !== userClientName) {
+        return false;
+      }
+      return true
+    })
+  }, [rawData, isAdmin, userClientName])
+
+  // Calculate KPIs using filtered data for most metrics
+  const kpis = React.useMemo(() => {
+    const filteredKpis = calculateKPIs(filteredData);
+    
+    // Get key insights from the full dataset (filtered only by client)
+    const fullDataKpis = calculateKPIs(clientFilteredData);
+    
+    // Use key insights from the full dataset
+    return {
+      ...filteredKpis,
+      lowestCoverageRegion: {
+        name: fullDataKpis.lowestCoverageRegion.name,
+        value: fullDataKpis.lowestCoverageRegion.value,
+        delta: fullDataKpis.lowestCoverageRegion.delta,
+        competitorCoverage: (fullDataKpis.lowestCoverageRegion as any).competitorCoverage || 0
+      },
+      highestAvailabilityDeltaRegion: fullDataKpis.highestAvailabilityDeltaRegion,
+      highestAvailabilityDeltaFromCompetitors: fullDataKpis.highestAvailabilityDeltaFromCompetitors
+    };
+  }, [filteredData, clientFilteredData]);
+
+  // Calculate other metrics using filtered data
   const timeSeriesData = React.useMemo(() => getTimeSeriesData(filteredData), [filteredData])
   const regionalData = React.useMemo(() => getRegionalData(filteredData), [filteredData])
   const cityRegionalData = React.useMemo(() => getCityRegionalData(filteredData), [filteredData])
@@ -155,6 +252,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const productData = React.useMemo(() => getProductData(filteredData), [filteredData])
   const choroplethData = React.useMemo(() => getChoroplethData(filteredData), [filteredData])
   const cityChoroplethData = React.useMemo(() => getCityChoroplethData(filteredData), [filteredData])
+  const coverageChoroplethData = React.useMemo(() => 
+    getHeatmapDataByType(filteredData, cityRegionalData, "coverage"), 
+    [filteredData, cityRegionalData]
+  )
+  const penetrationChoroplethData = React.useMemo(() => 
+    getHeatmapDataByType(filteredData, cityRegionalData, "penetration"), 
+    [filteredData, cityRegionalData]
+  )
 
   // Fetch data on component mount
   const fetchData = async () => {
@@ -195,6 +300,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         productData,
         choroplethData,
         cityChoroplethData,
+        coverageChoroplethData,
+        penetrationChoroplethData,
         refreshData
       }}
     >
