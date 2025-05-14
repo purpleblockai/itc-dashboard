@@ -3,6 +3,15 @@ import clientPromise from '@/lib/mongodb';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
+function parseReportDate(rawDate) {
+  if (typeof rawDate === "string" && /^\d{2}-\d{2}-\d{4}$/.test(rawDate)) {
+    const [day, month, year] = rawDate.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+  const t = Date.parse(rawDate);
+  return isNaN(t) ? new Date() : new Date(t);
+}
+
 export async function GET(request) {
   try {
     // Get the authenticated session
@@ -42,52 +51,35 @@ export async function GET(request) {
     
     // Transform the MongoDB data to match the expected format in the frontend
     const transformedData = data.map(item => {
-      // Create a proper date string that can be parsed correctly
-      let dateStr;
-      try {
-        const rawDate = item.Report_Date || new Date().toISOString();
-        // Ensure we have a proper date string that can be parsed
-        dateStr = new Date(rawDate).toISOString();
-      } catch (e) {
-        // Fallback to current date if there's an issue
-        dateStr = new Date().toISOString();
-      }
-      
-      // Process availability field for metrics calculation:
-      // "Yes" - Product is available in stock
-      // "No" - Product is out of stock but listed
-      // "Item Not Found" - Product is not listed
-      // Any other value - Treat as not listed
+      // 1. parse into a JS Date
+      const dt = parseReportDate(item.Report_Date || "");
+  
+      // 2. pull out only the YYYY-MM-DD
+      const dateOnly = dt.toISOString().split("T")[0];
+  
+      // availability flags
       const availabilityStatus = item.Availability || "";
-      
-      // isListed is true when the item is found (availability is "Yes" or "No")
-      const isListed = (availabilityStatus === "Yes" || availabilityStatus === "No");
-      
-      // stockAvailable is only true when the availability is explicitly "Yes"
-      const isAvailable = availabilityStatus === "Yes";
-      
+      const isListed      = availabilityStatus === "Yes" || availabilityStatus === "No";
+      const isAvailable   = availabilityStatus === "Yes";
+  
       return {
-        id: item._id.toString(),
-        reportDate: dateStr, // Store as ISO string instead of Date object
-        runDate: dateStr, // Use the same validated date string
-        productId: (item.Unique_Product_ID || "").toString(),
-        brand: item.Brand || "",
-        category: "",
+        id:                item._id.toString(),
+        reportDate:        dateOnly,               // <-- now just "2025-05-10"
+        productId:         String(item.Unique_Product_ID || ""),
+        brand:             item.Brand || "",
+        clientName:        item.Client_Name || "",
         productDescription: item.Name || "",
-        quantity: item.Quantity?.toString() || "",
-        city: item.City || "Mumbai", 
-        pincode: item.Pincode?.toString() || "",
-        area: "",
-        fgCode: "",
-        skuId: (item.SKU_ID || "").toString(),
-        platform: item.Platform || "",
-        mrp: typeof item.MRP === 'number' ? item.MRP : 0,
-        sellingPrice: typeof item.Selling_Price === 'number' ? item.Selling_Price : 0,
-        stockAvailable: isAvailable, // Use actual availability status
-        isListed: isListed, // Add a flag to track if the item is listed
-        availability: availabilityStatus, // Store the raw availability value
-        discount: item.Discount ? Number(item.Discount) : 0,
-        clientName: item.Client_Name || item.Brand || ""
+        city:              item.City || "",
+        pincode:           String(item.Pincode || ""),
+        skuId:             String(item.SKU_ID || ""),
+        platform:          item.Platform || "",
+        mrp:               typeof item.MRP === "number" ? item.MRP : 0,
+        sellingPrice:      typeof item.Selling_Price === "number" ? item.Selling_Price : 0,
+        availability:      availabilityStatus,
+        discount:          item.Discount ? Number(item.Discount) : 0,
+        isListed,
+        stockAvailable:    isAvailable,
+        // no runDate here
       };
     });
     

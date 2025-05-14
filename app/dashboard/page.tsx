@@ -302,7 +302,8 @@ export default function DashboardPage() {
                     </div>
                     <div className="w-full bg-slate-800/50 rounded-full h-2.5">
                       <div className="bg-orange-500 h-2.5 rounded-full" 
-                        style={{ width: `${(kpis.lowestCoverageRegion as any).competitorCoverage || 0}%` }}></div>
+                        style={{ width: `${(kpis.lowestCoverageRegion as any).competitorCoverage > 0 ? 
+                          Math.max((kpis.lowestCoverageRegion as any).competitorCoverage, 1) : 0}%` }}></div>
                     </div>
                   </div>
                   
@@ -316,9 +317,9 @@ export default function DashboardPage() {
               </div>
 
               <div className="rounded-md border overflow-hidden bg-black/5 dark:bg-black/20">
-                <div className="bg-green-900/10 dark:bg-green-900/20 p-4 border-b flex items-center gap-2">
-                  <Icons.trendingUp className="h-5 w-5 text-green-500" />
-                  <h3 className="font-medium text-lg">Highest Availability vs. Competitors</h3>
+                <div className="bg-red-900/10 dark:bg-red-900/20 p-4 border-b flex items-center gap-2">
+                  <Icons.alert className="h-5 w-5 text-red-500" />
+                  <h3 className="font-medium text-lg">Largest Availability Gap vs. Competitors</h3>
                 </div>
                 <div className="p-5 space-y-4">
                   <div className="flex items-center justify-between">
@@ -328,10 +329,12 @@ export default function DashboardPage() {
                     </p>
                     <Badge 
                       variant="outline" 
-                      className="bg-green-900/20 text-green-400 border-green-800/50"
+                      className="bg-red-900/20 text-red-400 border-red-800/50"
                     >
-                      +{(kpis as any).highestAvailabilityDeltaFromCompetitors?.delta?.toFixed(1) || 
-                         kpis.highestAvailabilityDeltaRegion.delta.toFixed(1) || '0.0'}%
+                      {((kpis as any).highestAvailabilityDeltaFromCompetitors?.delta || 
+                        kpis.highestAvailabilityDeltaRegion.delta || 0) > 0 ? "+" : ""}
+                      {((kpis as any).highestAvailabilityDeltaFromCompetitors?.delta?.toFixed(1) || 
+                         kpis.highestAvailabilityDeltaRegion.delta.toFixed(1) || '0.0')}%
                     </Badge>
                   </div>
                   
@@ -344,9 +347,9 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     <div className="w-full bg-slate-800/50 rounded-full h-2.5">
-                      <div className="bg-green-500 h-2.5 rounded-full" 
-                        style={{ width: `${(kpis as any).highestAvailabilityDeltaFromCompetitors?.value || 
-                                           kpis.highestAvailabilityDeltaRegion.value || 0}%` }}></div>
+                      <div className="bg-blue-600 h-2.5 rounded-full" 
+                        style={{ width: `${Math.max((kpis as any).highestAvailabilityDeltaFromCompetitors?.value || 
+                                           kpis.highestAvailabilityDeltaRegion.value || 0, 1)}%` }}></div>
                     </div>
                   </div>
                   
@@ -359,15 +362,13 @@ export default function DashboardPage() {
                     </div>
                     <div className="w-full bg-slate-800/50 rounded-full h-2.5">
                       <div className="bg-orange-500 h-2.5 rounded-full" 
-                        style={{ width: `${(kpis as any).highestAvailabilityDeltaFromCompetitors?.competitors || 0}%` }}></div>
+                        style={{ width: `${Math.max((kpis as any).highestAvailabilityDeltaFromCompetitors?.competitors || 0, 1)}%` }}></div>
                     </div>
                   </div>
                   
                   <p className="text-sm text-muted-foreground mt-3">
-                    This region has the highest availability advantage over competitors, showing your distribution strength.
-                    {((kpis as any).highestAvailabilityDeltaFromCompetitors?.delta || kpis.highestAvailabilityDeltaRegion.delta) !== 0 && (
-                      <span> This advantage has {((kpis as any).highestAvailabilityDeltaFromCompetitors?.delta || kpis.highestAvailabilityDeltaRegion.delta) > 0 ? 'increased' : 'decreased'} since last report.</span>
-                    )}
+                    This region has the largest availability gap where competitors have higher product availability than your brand.
+                    This represents an opportunity to improve your distribution in a competitive marketplace.
                   </p>
                 </div>
               </div>

@@ -16,7 +16,6 @@ import {
   getCityRegionalData,
   getCityChoroplethData,
   getHeatmapDataByType,
-  processRow
 } from "@/lib/data-service"
 import { useFilters } from "./filters/filter-provider"
 
@@ -156,6 +155,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = user?.role === "admin";
   const userClientName = user?.clientName;
 
+  // const filteredData = rawData
+
   // Filter data based on selected filters and user's client
   const filteredData = React.useMemo(() => {
     if (!rawData.length) return []
@@ -223,6 +224,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Calculate KPIs using filtered data for most metrics
   const kpis = React.useMemo(() => {
+    console.log("🛠 Active Filters:", filters)
+    console.log("🛠 rawData.length:", rawData.length)
+    console.log("🛠 filteredData.length:", filteredData.length)
+    
     const filteredKpis = calculateKPIs(filteredData);
     
     // Get key insights from the full dataset (filtered only by client)
@@ -268,10 +273,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const fetchData = async () => {
     try {
       setIsLoading(true)
-      const data = await fetchCompetitionData()
-      // Patch: ensure all data is processed through processRow
-      const processedData = (data as any[]).map(processRow) as ProcessedData[]
-      setRawData(processedData)
+      const data = await fetchCompetitionData()        // already ProcessedData[]
+      const parsed = data.map(r => ({
+        ...r,
+        reportDate: new Date(r.reportDate)
+      }))
+      setRawData(parsed)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err : new Error("Unknown error occurred"))

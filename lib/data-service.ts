@@ -1,25 +1,22 @@
 import Papa from "papaparse";
 
 export interface CompetitionData {
-  "Sn. No": string;
-  "Report Date": string;
-  "Run Date": string;
-  "Unique Product ID": string;
-  "Brand Name": string;
-  Category: string;
-  "Product Description": string;
-  Quantity: string;
-  City: string;
-  Pincode: string;
-  Area: string;
-  "FG Code": string;
-  "SKU ID": string;
-  Platform: string;
-  MRP: string;
-  "Selling Price": string;
-  "Stock Availability (Y/N)": string;
-  Discount: string;
+  Report_Date: string;          // "10-05-2025"
+  Unique_Product_ID: number;    // 1
+  Brand: string;                // "Bikaji"
+  Client_Name: string;          // "Bikaji"
+  Name: string;                 // "Bhujia No.1 – 1 24"
+  City: string;                 // "Mumbai"
+  Pincode: number;              // 400013
+  SKU_ID: string;               // "4GU5LPEOP4"
+  Platform: string;             // "Instamart"
+  MRP: string;                  // "NaN"
+  Selling_Price: string;        // "NaN"
+  Availability: string;         // "Item Not Found"
+  Discount: string;             // "NaN"
+  Added_To_DB: string;          // ISO timestamp "2025-05-10T06:32:18.144Z"
 }
+
 
 export interface ProcessedData {
   id: string;
@@ -27,22 +24,18 @@ export interface ProcessedData {
   runDate: Date;
   productId: string;
   brand: string;
-  category: string;
+  clientName: string;
   productDescription: string;
-  quantity: string;
   city: string;
   pincode: string;
-  area: string;
-  fgCode: string;
   skuId: string;
   platform: string;
   mrp: number;
   sellingPrice: number;
-  stockAvailable: boolean;
-  isListed: boolean;
   availability: string;
   discount: number;
-  clientName?: string;
+  isListed: boolean;
+  stockAvailable: boolean;
 }
 
 // Function to fetch data from MongoDB API
@@ -72,19 +65,21 @@ export function processUploadedData(data: any[]): ProcessedData[] {
     }
 
     const requiredColumns = [
-      "Sn. No",
-      "Report Date",
-      "Run Date",
-      "Unique Product ID",
-      "Brand Name",
-      "Product Description",
+      "Report_Date",
+      "Unique_Product_ID",
+      "Brand",
+      "Client_Name",
+      "Name",
       "City",
       "Pincode",
       "Platform",
       "MRP",
-      "Selling Price",
-      "Stock Availability (Y/N)",
+      "Selling_Price",
+      "Availability",
+      "Discount",
+      "Added_To_DB",
     ];
+    
 
     const firstRow = data[0];
     const missingColumns = requiredColumns.filter((col) => !(col in firstRow));
@@ -103,47 +98,42 @@ export function processUploadedData(data: any[]): ProcessedData[] {
 
 // Function to process each row of the CSV data
 export function processRow(row: CompetitionData): ProcessedData {
-  // Parse dates (DD-MM-YYYY format)
   const parseDate = (dateStr: string): Date => {
-    if (!dateStr || typeof dateStr !== "string") return new Date();
-    const [day, month, year] = dateStr.split("-").map(Number);
-    return new Date(year, month - 1, day);
+    if (!dateStr) return new Date();
+    // 1) dd-MM-YYYY
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+      const [d, m, y] = dateStr.split("-").map(Number);
+      return new Date(y, m - 1, d);
+    }
+    // 2) ISO fallback
+    return new Date(dateStr);
   };
 
-  // Process availability status
-  const availabilityStatus = row["Stock Availability (Y/N)"];
-  const isItemNotFound = availabilityStatus === "Item Not Found";
-  const isLocationNotFound = availabilityStatus === "Location Not Found";
-  
-  // isListed is true when the item is found (not "Item Not Found")
-  const isListed = !isItemNotFound;
-  
-  // stockAvailable is only true when the availability is explicitly "Yes"
-  const stockAvailable = (availabilityStatus || "").toLowerCase() === "yes";
+  // Determine availability status
+  const isListed = row.Availability === "Yes" || row.Availability === "No";
+  const stockAvailable = row.Availability === "Yes";
 
   return {
-    id: row["Sn. No"],
-    reportDate: parseDate(row["Report Date"]),
-    runDate: parseDate(row["Run Date"]),
-    productId: row["Unique Product ID"],
-    brand: row["Brand Name"],
-    category: row["Category"] || "",
-    productDescription: row["Product Description"],
-    quantity: row["Quantity"] || "",
-    city: (row["City"] || "").toLowerCase(),
-    pincode: row["Pincode"],
-    area: row["Area"] || "",
-    fgCode: row["FG Code"] || "",
-    skuId: row["SKU ID"] || row["Unique Product ID"],
-    platform: row["Platform"],
-    mrp: Number.parseFloat(row["MRP"]),
-    sellingPrice: Number.parseFloat(row["Selling Price"]),
-    stockAvailable: stockAvailable,
+    id: String(row.Unique_Product_ID),
+    reportDate: parseDate(row.Report_Date),
+    runDate: row.Added_To_DB ? new Date(row.Added_To_DB) : new Date(),
+    productId: String(row.Unique_Product_ID),
+    brand: row.Brand,
+    clientName: row.Client_Name,
+    productDescription: row.Name,
+    city: row.City.toLowerCase(),
+    pincode: String(row.Pincode),
+    skuId: row.SKU_ID,
+    platform: row.Platform,
+    mrp: parseFloat(row.MRP) || 0,
+    sellingPrice: parseFloat(row.Selling_Price) || 0,
+    availability: row.Availability,
+    discount: parseFloat(row.Discount) || 0,
     isListed: isListed,
-    availability: availabilityStatus,
-    discount: Number.parseFloat(row["Discount"] || "0"),
+    stockAvailable: stockAvailable
   };
 }
+
 
 // Function to get unique values from a field
 export function getUniqueValues(
@@ -586,7 +576,7 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     );
     
     const competitorItems = serviceableItems.filter(item => 
-      item.brand !== clientName && item.clientName !== clientName
+      item.brand !== clientName
     );
     
     // Calculate client metrics
@@ -771,16 +761,20 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     .sort((a, b) => a.coverage - b.coverage)[0] || 
     { name: "-", coverage: 0, coverageDelta: 0, competitorCoverage: 0 };
   
-  // Find highest availability delta region
-  const highestAvailabilityDeltaRegion = regionMetrics
-    .filter(region => region.name !== "-" && region.availabilityDelta > 0)
-    .sort((a, b) => b.availabilityDelta - a.availabilityDelta)[0] || 
-    { name: "-", availability: 0, availabilityDelta: 0 };
-  
-  // Find highest availability delta from competitors
-  const highestAvailabilityDeltaFromCompetitors = regionMetrics
-    .filter(region => region.name !== "-" && region.availability > 0 && region.availabilityDeltaFromCompetitors > 0)
-    .sort((a, b) => b.availabilityDeltaFromCompetitors - a.availabilityDeltaFromCompetitors)[0] || 
+  // Find regions with the largest negative availability gap compared to competitors
+  // Prioritize regions where competitor availability is significantly higher than client
+  const largestNegativeAvailabilityGap = regionMetrics
+    .filter(region => 
+      region.name !== "-" && 
+      region.availability > 0 && 
+      region.competitorAvailability > 0 &&
+      region.availabilityDeltaFromCompetitors < 0 // Negative delta means competitors have higher availability
+    )
+    .sort((a, b) => a.availabilityDeltaFromCompetitors - b.availabilityDeltaFromCompetitors)[0] || 
+    // Fallback to the region with lowest absolute availability if no negative deltas exist
+    regionMetrics
+      .filter(region => region.name !== "-" && region.availability > 0 && region.competitorAvailability > 0)
+      .sort((a, b) => a.availability - b.availability)[0] ||
     { name: "-", availability: 0, competitorAvailability: 0, availabilityDeltaFromCompetitors: 0 };
   
   return {
@@ -791,15 +785,15 @@ function calculateRegionalInsights(data: ProcessedData[]): {
       competitorCoverage: lowestCoverageRegion.competitorCoverage
     },
     highestAvailabilityDeltaRegion: { 
-      name: highestAvailabilityDeltaRegion.name, 
-      value: highestAvailabilityDeltaRegion.availability, 
-      delta: highestAvailabilityDeltaRegion.availabilityDelta
+      name: largestNegativeAvailabilityGap.name, 
+      value: largestNegativeAvailabilityGap.availability, 
+      delta: largestNegativeAvailabilityGap.availabilityDelta
     },
     highestAvailabilityDeltaFromCompetitors: {
-      name: highestAvailabilityDeltaFromCompetitors.name,
-      value: highestAvailabilityDeltaFromCompetitors.availability,
-      competitors: highestAvailabilityDeltaFromCompetitors.competitorAvailability,
-      delta: highestAvailabilityDeltaFromCompetitors.availabilityDeltaFromCompetitors
+      name: largestNegativeAvailabilityGap.name,
+      value: largestNegativeAvailabilityGap.availability,
+      competitors: largestNegativeAvailabilityGap.competitorAvailability,
+      delta: largestNegativeAvailabilityGap.availabilityDeltaFromCompetitors
     }
   };
 }
@@ -1616,7 +1610,7 @@ export function getCoverageByBrandData(data: ProcessedData[]): {
   return Array.from(brandMap.entries())
     .filter(([name]) => name) // Filter out empty brand names
     .map(([name, items]) => {
-      // Group data by pincode to calculate penetration and availability
+      // Group data by pincode to calculate serviceable items
       const pincodeMap = new Map<string, ProcessedData[]>();
       items.forEach(item => {
         if (!pincodeMap.has(item.pincode)) {
@@ -1638,36 +1632,23 @@ export function getCoverageByBrandData(data: ProcessedData[]): {
         }
       });
       
-      // Calculate listed pincodes
-      const listedPincodes = new Set();
-      pincodeMap.forEach((pincodeItems, pincode) => {
-        const isListed = pincodeItems.some(item => 
-          item.availability === "Yes" || item.availability === "No"
-        );
-        if (isListed) {
-          listedPincodes.add(pincode);
-        }
-      });
+      // Get all items in serviceable pincodes
+      const serviceableItems = items.filter(item => 
+        serviceablePincodes.has(item.pincode)
+      );
       
-      // Calculate available pincodes
-      const availablePincodes = new Set();
-      pincodeMap.forEach((pincodeItems, pincode) => {
-        const isAvailable = pincodeItems.some(item => item.availability === "Yes");
-        if (isAvailable) {
-          availablePincodes.add(pincode);
-        }
-      });
+      // Count available items (Yes availability)
+      const availableItems = serviceableItems.filter(item => 
+        item.availability === "Yes"
+      ).length;
       
-      // Calculate penetration
-      const penetration = serviceablePincodes.size > 0 ? 
-        (listedPincodes.size / serviceablePincodes.size) * 100 : 0;
+      // Total serviceable items
+      const totalServiceableItems = serviceableItems.length;
       
-      // Calculate availability
-      const availability = listedPincodes.size > 0 ? 
-        (availablePincodes.size / listedPincodes.size) * 100 : 0;
-      
-      // Calculate coverage (Method 1: penetration * availability / 100)
-      const coverage = (penetration * availability) / 100;
+      // Calculate coverage directly (matching the calculateCoverage function)
+      // Coverage = Number of "Yes" Items / Total Serviceable Items
+      const coverage = totalServiceableItems > 0 ?
+        (availableItems / totalServiceableItems) * 100 : 0;
       
       return {
         name,

@@ -15,6 +15,9 @@ import { useData } from "@/components/data-provider"
 import { getUniqueValues } from "@/lib/data-service"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 
+type DateRange = { from?: Date; to?: Date };
+
+
 export function FilterBar() {
   const { filters, setFilters, resetFilters } = useFilters()
   const { rawData, isLoading } = useData()
@@ -157,19 +160,25 @@ export function FilterBar() {
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              initialFocus
-              mode="range"
-              defaultMonth={filters.dateRange.from}
-              selected={{
-                from: filters.dateRange.from,
-                to: filters.dateRange.to,
-              }}
-              onSelect={(range) => {
-                setFilters({ dateRange: range || { from: undefined, to: undefined } })
-              }}
-              numberOfMonths={2}
-            />
+          <Calendar
+            initialFocus
+            mode="range"                                           // ← required!
+            defaultMonth={filters.dateRange.from ?? new Date()}   // never undefined
+            selected={
+              filters.dateRange.from && filters.dateRange.to
+                ? { from: filters.dateRange.from, to: filters.dateRange.to }
+                : undefined
+            }
+            onSelect={(range?: DateRange) => {                    // now TS knows what `range` is
+              setFilters({
+                dateRange: {
+                  from: range?.from,
+                  to:   range?.to,
+                },
+              })
+            }}
+            numberOfMonths={2}
+          />
           </PopoverContent>
         </Popover>
       </div>
