@@ -88,7 +88,7 @@ export function DataTable<TData, TValue>({
         {showExport && data.length > 0 && <ExportCSV data={data} filename={exportFilename} />}
       </div>
       <div className="rounded-md border">
-        <Table className="pincode-table">
+        <Table className="pincode-table" style={{width: '100%', tableLayout: 'fixed'}}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -110,7 +110,9 @@ export function DataTable<TData, TValue>({
                   className={onRowClick ? "cursor-pointer hover:bg-muted/50" : ""}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
                   ))}
                 </TableRow>
               ))

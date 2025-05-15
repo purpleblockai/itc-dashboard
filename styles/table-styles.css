@@ -1,0 +1,21 @@
+.pincode-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.pincode-table th,
+.pincode-table td {
+  text-align: left;
+}
+
+/* Capitalize city names */
+.city-name {
+  text-transform: capitalize;
+}
+
+/* Increase spacing between columns */
+.pincode-table th,
+.pincode-table td {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+} 

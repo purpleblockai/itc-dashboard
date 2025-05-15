@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ChoroplethMap } from "@/components/choropleth-map"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { calculateKPIs } from "@/lib/data-service"
+import "@/styles/table-styles.css"
 
 // Define columns for the city data table
 const cityColumns: ColumnDef<{
@@ -33,7 +34,8 @@ const cityColumns: ColumnDef<{
       </Button>
     ),
     cell: ({ row }) => {
-      return <span className="font-medium">{row.getValue("city")}</span>
+      const city = row.getValue("city") as string;
+      return <span className="font-medium" style={{textTransform: 'capitalize'}}>{city}</span>
     }
   },
   {
@@ -168,14 +170,10 @@ const pincodeColumns: ColumnDef<{
   {
     accessorKey: "city",
     header: "City",
-  },
-  {
-    accessorKey: "area",
-    header: "Area",
     cell: ({ row }) => {
-      const area = row.getValue("area") as string
-      return area ? area : "-"
-    },
+      const city = row.getValue("city") as string;
+      return <span style={{textTransform: 'capitalize'}}>{city}</span>
+    }
   },
   {
     accessorKey: "coverage",
@@ -264,32 +262,6 @@ const pincodeColumns: ColumnDef<{
       )
     },
   },
-  {
-    accessorKey: "stockOutPercent",
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        Stock-out %
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
-    cell: ({ row }) => {
-      const value = row.getValue("stockOutPercent") as number
-      return (
-        <Badge
-          variant="outline"
-          className={`${
-            value < 10
-              ? "badge-change-positive"
-              : value < 20
-                ? "badge-change-neutral"
-                : "badge-change-negative"
-          } font-medium`}
-        >
-          {value}%
-        </Badge>
-      )
-    },
-  },
 ];
 
 export default function RegionalAnalysisPage() {
@@ -306,6 +278,8 @@ export default function RegionalAnalysisPage() {
   const [selectedCity, setSelectedCity] = useState<string | null>(null)
   const [viewType, setViewType] = useState<"city" | "pincode">("city")
   const [heatmapType, setHeatmapType] = useState<"availability" | "coverage" | "penetration">("availability")
+  // Key to force re-render of heatmap when needed
+  const [mapKey, setMapKey] = useState<number>(0)
 
   // Filter pincode data by selected city
   const filteredPincodeData = selectedCity 
@@ -314,6 +288,11 @@ export default function RegionalAnalysisPage() {
 
   // Get the appropriate choropleth data based on the selected metric
   const getActiveHeatmapData = () => {
+    // If we have no data, return empty array with correct structure
+    if (filteredData.length === 0) {
+      return [];
+    }
+    
     if (viewType === "pincode") {
       return choroplethData;
     }
@@ -329,38 +308,72 @@ export default function RegionalAnalysisPage() {
     }
   };
 
+  // Check if data is available
+  const hasData = !isLoading && filteredData.length > 0;
+
   // Calculate coverage and penetration for cities using actual data
-  const enhancedCityData = !isLoading ? cityRegionalData.map(city => {
-    const cityData = filteredData.filter(item => (item.city || "").toLowerCase() === (city.city || "").toLowerCase());
-    const metrics = calculateKPIs(cityData);
-    return {
-      ...city,
-      coverage: parseFloat(metrics.coverageMethod1.toFixed(1)),
-      penetration: parseFloat(metrics.penetration.toFixed(1)),
-      stockAvailability: parseFloat(metrics.availability.toFixed(1)),
-    };
-  }) : [];
+  const enhancedCityData = !isLoading 
+    ? hasData 
+      ? cityRegionalData.map(city => {
+          const cityData = filteredData.filter(item => (item.city || "").toLowerCase() === (city.city || "").toLowerCase());
+          const metrics = calculateKPIs(cityData);
+          return {
+            ...city,
+            coverage: parseFloat(metrics.coverageMethod1.toFixed(1)),
+            penetration: parseFloat(metrics.penetration.toFixed(1)),
+            stockAvailability: parseFloat(metrics.availability.toFixed(1)),
+          };
+        })
+      : cityRegionalData.map(city => ({
+          ...city,
+          coverage: 0,
+          penetration: 0,
+          stockAvailability: 0,
+          stockOutPercent: 0
+        }))
+    : [];
 
   // Calculate coverage and penetration for pincodes using actual data
-  const enhancedPincodeData = !isLoading ? filteredPincodeData.map(pincode => {
-    const pincodeData = filteredData.filter(item => item.pincode === pincode.pincode);
-    const metrics = calculateKPIs(pincodeData);
-    return {
-      ...pincode,
-      coverage: parseFloat(metrics.coverageMethod1.toFixed(1)),
-      penetration: parseFloat(metrics.penetration.toFixed(1)),
-      stockAvailability: parseFloat(metrics.availability.toFixed(1)),
-    };
-  }) : [];
+  const enhancedPincodeData = !isLoading 
+    ? hasData
+      ? filteredPincodeData.map(pincode => {
+          const pincodeData = filteredData.filter(item => item.pincode === pincode.pincode);
+          const metrics = calculateKPIs(pincodeData);
+          return {
+            ...pincode,
+            coverage: parseFloat(metrics.coverageMethod1.toFixed(1)),
+            penetration: parseFloat(metrics.penetration.toFixed(1)),
+            stockAvailability: parseFloat(metrics.availability.toFixed(1)),
+          };
+        })
+      : filteredPincodeData.map(pincode => ({
+          ...pincode,
+          coverage: 0,
+          penetration: 0,
+          stockAvailability: 0,
+          stockOutPercent: 0
+        }))
+    : [];
 
   const handleCityRowClick = (city: string) => {
     setSelectedCity(city);
     setViewType("pincode");
+    // Reset map to clear any selections when switching views
+    setMapKey(prevKey => prevKey + 1);
   };
 
   const handleBackToCity = () => {
     setSelectedCity(null);
     setViewType("city");
+    // Reset map to clear any selections when switching views
+    setMapKey(prevKey => prevKey + 1);
+  };
+
+  // Handle changes to the heatmap type
+  const handleHeatmapTypeChange = (type: "availability" | "coverage" | "penetration") => {
+    setHeatmapType(type);
+    // Reset map to clear any selections when changing heatmap type
+    setMapKey(prevKey => prevKey + 1);
   };
 
   return (
@@ -387,7 +400,7 @@ export default function RegionalAnalysisPage() {
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle className="text-xl dashboard-text">
-                      {viewType === "city" ? "City-wise Heatmap" : `Pincode Heatmap: ${selectedCity}`}
+                      {viewType === "city" ? "City-wise Heatmap" : `Pincode Heatmap: ${selectedCity ? selectedCity.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : ''}`}
                     </CardTitle>
                     <CardDescription>
                       {viewType === "city" 
@@ -399,21 +412,21 @@ export default function RegionalAnalysisPage() {
                     <Button 
                       variant={heatmapType === "availability" ? "default" : "outline"} 
                       size="sm"
-                      onClick={() => setHeatmapType("availability")}
+                      onClick={() => handleHeatmapTypeChange("availability")}
                     >
                       Availability
                     </Button>
                     <Button 
                       variant={heatmapType === "coverage" ? "default" : "outline"} 
                       size="sm"
-                      onClick={() => setHeatmapType("coverage")}
+                      onClick={() => handleHeatmapTypeChange("coverage")}
                     >
                       Coverage
                     </Button>
                     <Button 
                       variant={heatmapType === "penetration" ? "default" : "outline"} 
                       size="sm"
-                      onClick={() => setHeatmapType("penetration")}
+                      onClick={() => handleHeatmapTypeChange("penetration")}
                     >
                       Penetration
                     </Button>
@@ -425,9 +438,15 @@ export default function RegionalAnalysisPage() {
                   <div className="h-[450px]">
                     <Skeleton className="h-full w-full" />
                   </div>
+                ) : filteredData.length === 0 ? (
+                  <div className="h-[450px] flex items-center justify-center">
+                    <p className="text-muted-foreground text-center">No data available for the selected date range</p>
+                  </div>
                 ) : (
                   viewType === "city" ? (
-                    <ChoroplethMap data={getActiveHeatmapData()} height={450} heatmapType={heatmapType} />
+                    <div className="h-[450px]">
+                      <ChoroplethMap key={`city-map-${mapKey}`} data={getActiveHeatmapData()} height={450} heatmapType={heatmapType} />
+                    </div>
                   ) : (
                     <>
                       <div className="mb-4">
@@ -441,7 +460,9 @@ export default function RegionalAnalysisPage() {
                           Back to Cities
                         </Button>
                       </div>
-                      <ChoroplethMap data={choroplethData} height={450} heatmapType={heatmapType} />
+                      <div className="h-[450px]">
+                        <ChoroplethMap key={`pincode-map-${mapKey}`} data={choroplethData} height={450} heatmapType={heatmapType} />
+                      </div>
                     </>
                   )
                 )}
@@ -457,7 +478,7 @@ export default function RegionalAnalysisPage() {
                 <span>
                   {viewType === "city" 
                     ? "Cities by Stock-out Percentage" 
-                    : `Pincodes in ${selectedCity}`}
+                    : `Pincodes in ${selectedCity ? selectedCity.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : ''}`}
                 </span>
                 {viewType === "pincode" && (
                   <Button 
@@ -481,6 +502,10 @@ export default function RegionalAnalysisPage() {
               {isLoading ? (
                 <div className="h-[500px]">
                   <Skeleton className="h-full w-full" />
+                </div>
+              ) : filteredData.length === 0 ? (
+                <div className="h-[300px] flex items-center justify-center">
+                  <p className="text-muted-foreground text-center">No data available for the selected date range</p>
                 </div>
               ) : viewType === "city" ? (
                 <DataTable

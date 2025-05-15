@@ -160,25 +160,28 @@ export function FilterBar() {
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            initialFocus
-            mode="range"                                           // ← required!
-            defaultMonth={filters.dateRange.from ?? new Date()}   // never undefined
-            selected={
-              filters.dateRange.from && filters.dateRange.to
-                ? { from: filters.dateRange.from, to: filters.dateRange.to }
-                : undefined
-            }
-            onSelect={(range?: DateRange) => {                    // now TS knows what `range` is
-              setFilters({
-                dateRange: {
-                  from: range?.from,
-                  to:   range?.to,
-                },
-              })
-            }}
-            numberOfMonths={2}
-          />
+            <Calendar
+              initialFocus
+              mode="range"
+              defaultMonth={filters.dateRange.from ?? new Date()}
+              selected={{
+                from: filters.dateRange.from,
+                to: filters.dateRange.to
+              }}
+              onSelect={(range: DateRange | undefined) => {
+                setFilters({
+                  dateRange: {
+                    from: range?.from,
+                    to: range?.to,
+                  },
+                });
+                // Don't close the popover until a complete range is selected
+                if (range?.from && range?.to) {
+                  setCalendarOpen(false);
+                }
+              }}
+              numberOfMonths={2}
+            />
           </PopoverContent>
         </Popover>
       </div>

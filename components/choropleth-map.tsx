@@ -25,7 +25,9 @@ function toTitleCase(str: string): string {
 
 export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "availability" }: ChoroplethMapProps) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [hoveredCell, setHoveredCell] = useState<ChoroplethData | null>(null)
+  const [selectedCell, setSelectedCell] = useState<string | null>(null)
 
   // Helper function to get the metric name for display
   const getMetricName = () => {
@@ -47,24 +49,31 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
 
     const svg = d3.select(svgRef.current)
     const width = svgRef.current.clientWidth
-    const margin = { top: 20, right: 20, bottom: 50, left: 40 } // Increase bottom margin to avoid overlap
+    const margin = { top: 20, right: 20, bottom: 90, left: 40 } // Increased bottom margin from 70 to 90
     const innerWidth = width - margin.left - margin.right
-    const innerHeight = height - margin.top - margin.bottom
-
-    // Since we don't have actual GeoJSON data, create a grid visualization
+    
+    // Calculate grid dimensions based on data
     const numCols = Math.min(Math.ceil(Math.sqrt(data.length * 1.5)), 12) // Wider grid for better readability
     const numRows = Math.ceil(data.length / numCols)
     const cellWidth = innerWidth / numCols
-    const cellHeight = innerHeight / numRows
+    const cellHeight = (height - margin.top - margin.bottom) / Math.max(numRows, 1)
 
     // For single city case, adjust the cell size to be centered
     const isSingleCity = data.length === 1
     const singleCityCellWidth = Math.min(innerWidth * 0.5, 200)
-    const singleCityCellHeight = Math.min(innerHeight * 0.5, 200)
+    const singleCityCellHeight = Math.min((height - margin.top - margin.bottom) * 0.5, 200)
     
     // Use adjusted width/height for single city
     const finalCellWidth = isSingleCity ? singleCityCellWidth : cellWidth
     const finalCellHeight = isSingleCity ? singleCityCellHeight : cellHeight
+
+    // Calculate the total grid height
+    const gridHeight = isSingleCity 
+      ? singleCityCellHeight 
+      : Math.ceil(data.length / numCols) * cellHeight;
+    
+    // Set the inner height based on grid content
+    const innerHeight = gridHeight;
 
     // Color scale - different color schemes based on metric
     let colorScale;
@@ -99,10 +108,23 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
       // Create a single cell
       const cell = g.append("g")
         .attr("class", "cell")
+        .attr("data-id", data[0].id)
         .attr("transform", `translate(${centerX}, ${centerY})`)
         .style("cursor", onCellClick ? "pointer" : "default")
         .on("click", (event: any, d: any) => {
           if (onCellClick) onCellClick(data[0].id)
+          setSelectedCell(data[0].id)
+          
+          // Reset previous selection
+          d3.selectAll("g.cell rect")
+            .attr("stroke", "#111")
+            .attr("stroke-width", 1)
+            
+          // Highlight new selection
+          d3.select(event.currentTarget)
+            .select("rect")
+            .attr("stroke", "#fff")
+            .attr("stroke-width", 2)
         })
         .on("mouseover", (event: any) => {
           setHoveredCell(data[0])
@@ -116,11 +138,13 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
         .on("mouseout", (event: any) => {
           setHoveredCell(null)
           
-          // Restore normal appearance
-          d3.select(event.currentTarget)
-            .select("rect")
-            .attr("stroke", "#111")
-            .attr("stroke-width", 1)
+          // Only remove highlight if this is not the selected cell
+          if (selectedCell !== data[0].id) {
+            d3.select(event.currentTarget)
+              .select("rect")
+              .attr("stroke", "#111")
+              .attr("stroke-width", 1)
+          }
         });
         
       // Add rectangle
@@ -130,8 +154,8 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
         .attr("rx", 4) // Rounded corners
         .attr("ry", 4)
         .attr("fill", colorScale(data[0].value))
-        .attr("stroke", "#111")
-        .attr("stroke-width", 1);
+        .attr("stroke", selectedCell === data[0].id ? "#fff" : "#111")
+        .attr("stroke-width", selectedCell === data[0].id ? 2 : 1);
         
       // Add label
       cell.append("text")
@@ -161,6 +185,7 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
         .enter()
         .append("g")
         .attr("class", "cell")
+        .attr("data-id", (d: ChoroplethData) => d.id)
         .attr("transform", (_: any, i: number) => {
           const x = (i % numCols) * cellWidth
           const y = Math.floor(i / numCols) * cellHeight
@@ -169,6 +194,18 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
         .style("cursor", onCellClick ? "pointer" : "default")
         .on("click", (event: any, d: ChoroplethData) => {
           if (onCellClick) onCellClick(d.id)
+          setSelectedCell(d.id)
+          
+          // Reset previous selection
+          d3.selectAll("g.cell rect")
+            .attr("stroke", "#111")
+            .attr("stroke-width", 1)
+            
+          // Highlight new selection
+          d3.select(event.currentTarget)
+            .select("rect")
+            .attr("stroke", "#fff")
+            .attr("stroke-width", 2)
         })
         .on("mouseover", (event: any, d: ChoroplethData) => {
           setHoveredCell(d)
@@ -179,14 +216,16 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)
         })
-        .on("mouseout", (event: any) => {
+        .on("mouseout", (event: any, d: ChoroplethData) => {
           setHoveredCell(null)
           
-          // Restore normal appearance
-          d3.select(event.currentTarget)
-            .select("rect")
-            .attr("stroke", "#111")
-            .attr("stroke-width", 1)
+          // Only remove highlight if this is not the selected cell
+          if (selectedCell !== d.id) {
+            d3.select(event.currentTarget)
+              .select("rect")
+              .attr("stroke", "#111")
+              .attr("stroke-width", 1)
+          }
         })
 
       // Add rectangles
@@ -196,8 +235,8 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
         .attr("rx", 4) // Rounded corners
         .attr("ry", 4)
         .attr("fill", (d: ChoroplethData) => colorScale(d.value))
-        .attr("stroke", "#111")
-        .attr("stroke-width", 1)
+        .attr("stroke", (d: ChoroplethData) => selectedCell === d.id ? "#fff" : "#111")
+        .attr("stroke-width", (d: ChoroplethData) => selectedCell === d.id ? 2 : 1)
 
       // Add labels - show properly capitalized city name or ID
       cells.append("text")
@@ -221,12 +260,16 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
         .text((d: ChoroplethData) => `${d.value}%`)
     }
 
-    // Add legend with improved design
+    // Calculate the legend position based on grid content
     const legendWidth = Math.min(innerWidth * 0.6, 300)
     const legendHeight = 20
     const legendX = (innerWidth - legendWidth) / 2
-    // Move the legend further down when there's only one city
-    const legendY = isSingleCity ? innerHeight - legendHeight * 2 : innerHeight + 5
+    
+    // Position the legend below all grid cells with increased spacing
+    const legendY = innerHeight + 40 // Increased from 20 to 40 for more spacing
+    
+    // Increase the SVG height to accommodate the legend with more spacing
+    svg.attr("height", margin.top + innerHeight + margin.bottom + 20) // Added 20px extra padding
 
     const legendScale = d3.scaleLinear().domain([0, 100]).range([0, legendWidth])
 
@@ -277,12 +320,65 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
 
     g.append("text")
       .attr("x", legendX + legendWidth / 2)
-      .attr("y", legendY - 8)
+      .attr("y", legendY - 12) // Increased spacing from -8 to -12
       .attr("text-anchor", "middle")
       .attr("fill", "currentColor")
       .attr("font-size", "14px")
       .attr("font-weight", "bold")
       .text(`${getMetricName()} %`)
+    
+    // Add current selected or hovered cell information below the legend
+    const cellInfoY = legendY + legendHeight + 45; // Increased from 35 to 45 for more spacing
+    
+    // Create a text element that will be updated when hovering
+    const cellInfoText = g.append("text")
+      .attr("class", "cell-info")
+      .attr("x", innerWidth / 2)
+      .attr("y", cellInfoY)
+      .attr("text-anchor", "middle")
+      .attr("fill", "currentColor")
+      .attr("font-size", "14px")
+      .style("font-weight", "medium")
+    
+    // Update the cell info when a cell is hovered
+    function updateCellInfo(d: ChoroplethData | null) {
+      if (!d) {
+        // Use selected cell if available and no hover
+        if (selectedCell) {
+          const selected = data.find(item => item.id === selectedCell);
+          if (selected) {
+            const formattedName = toTitleCase(selected.city || selected.id);
+            cellInfoText.text(`${selected.id}: ${selected.value}% availability`);
+          } else {
+            cellInfoText.text("");
+          }
+        } else {
+          cellInfoText.text("");
+        }
+      } else {
+        const formattedName = toTitleCase(d.city || d.id);
+        if (heatmapType === "coverage") {
+          cellInfoText.text(`${d.id}: ${d.value}% coverage`);
+        } else if (heatmapType === "penetration") {
+          cellInfoText.text(`${d.id}: ${d.value}% penetration`);
+        } else {
+          cellInfoText.text(`${d.id}: ${d.value}% availability`);
+        }
+      }
+    }
+    
+    // Initial update based on selected cell
+    updateCellInfo(hoveredCell);
+    
+    // Update cell info text when hovering
+    g.selectAll("g.cell")
+      .on("mouseover.info", function(event: any, d: any) {
+        const data = d as ChoroplethData;
+        updateCellInfo(data);
+      })
+      .on("mouseout.info", function() {
+        updateCellInfo(null);
+      });
 
     // Add a tooltip div for detailed information
     const tooltip = d3.select("body")
@@ -322,22 +418,11 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
       tooltip.remove()
     }
     
-  }, [data, height, onCellClick, heatmapType])
+  }, [data, height, onCellClick, heatmapType, selectedCell, hoveredCell])
 
   return (
-    <div className="w-full h-full">
-      <svg ref={svgRef} width="100%" height={height} />
-      {hoveredCell && (
-        <div className="text-sm mt-2 text-center">
-          {heatmapType === "coverage" ? (
-            <span><span className="font-semibold">{hoveredCell.city || hoveredCell.id}</span>: {hoveredCell.value}% coverage</span>
-          ) : heatmapType === "penetration" ? (
-            <span><span className="font-semibold">{hoveredCell.city || hoveredCell.id}</span>: {hoveredCell.value}% penetration</span>
-          ) : (
-            <span><span className="font-semibold">{hoveredCell.city || hoveredCell.id}</span>: {hoveredCell.value}% availability</span>
-          )}
-        </div>
-      )}
+    <div ref={containerRef} className="w-full h-full overflow-auto">
+      <svg ref={svgRef} width="100%" />
     </div>
   )
 }

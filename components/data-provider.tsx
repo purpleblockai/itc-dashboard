@@ -193,15 +193,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Filter by date range
-      if (filters.dateRange.from && item.reportDate < filters.dateRange.from) {
-        return false
+      if (filters.dateRange.from) {
+        // Handle case when we only have a start date
+        const itemDate = new Date(item.reportDate);
+        const fromDate = new Date(filters.dateRange.from);
+        
+        // Normalize dates to start of day for comparison
+        fromDate.setHours(0, 0, 0, 0);
+        if (itemDate < fromDate) {
+          return false;
+        }
       }
 
       if (filters.dateRange.to) {
-        const toDateEnd = new Date(filters.dateRange.to)
-        toDateEnd.setHours(23, 59, 59, 999)
-        if (item.reportDate > toDateEnd) {
-          return false
+        // Handle case when we have an end date
+        const itemDate = new Date(item.reportDate);
+        const toDate = new Date(filters.dateRange.to);
+        
+        // Normalize to end of day for comparison
+        toDate.setHours(23, 59, 59, 999);
+        if (itemDate > toDate) {
+          return false;
         }
       }
 
@@ -230,10 +242,58 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     
     const filteredKpis = calculateKPIs(filteredData);
     
-    // Get key insights from the full dataset (filtered only by client)
-    const fullDataKpis = calculateKPIs(clientFilteredData);
+    // If filteredData is empty (e.g., due to date filter) return empty insights
+    if (filteredData.length === 0) {
+      return {
+        ...filteredKpis,
+        lowestCoverageRegion: {
+          name: "No Data",
+          value: 0,
+          delta: 0,
+          competitorCoverage: 0
+        },
+        highestAvailabilityDeltaRegion: {
+          name: "No Data",
+          value: 0,
+          delta: 0
+        },
+        highestAvailabilityDeltaFromCompetitors: {
+          name: "No Data",
+          value: 0,
+          competitors: 0,
+          delta: 0
+        }
+      };
+    }
     
-    // Use key insights from the full dataset
+    // Apply client filter but keep date and other filters for key insights
+    const keyInsightsData = clientFilteredData.filter(item => {
+      // Apply the same date filters as in filteredData
+      if (filters.dateRange.from) {
+        const itemDate = new Date(item.reportDate);
+        const fromDate = new Date(filters.dateRange.from);
+        fromDate.setHours(0, 0, 0, 0);
+        if (itemDate < fromDate) {
+          return false;
+        }
+      }
+
+      if (filters.dateRange.to) {
+        const itemDate = new Date(item.reportDate);
+        const toDate = new Date(filters.dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        if (itemDate > toDate) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+    
+    // Calculate insights based on the filtered data
+    const fullDataKpis = calculateKPIs(keyInsightsData);
+    
+    // Use key insights from the proper dataset
     return {
       ...filteredKpis,
       lowestCoverageRegion: {
@@ -245,7 +305,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       highestAvailabilityDeltaRegion: fullDataKpis.highestAvailabilityDeltaRegion,
       highestAvailabilityDeltaFromCompetitors: fullDataKpis.highestAvailabilityDeltaFromCompetitors
     };
-  }, [filteredData, clientFilteredData]);
+  }, [filteredData, clientFilteredData, filters.dateRange]);
 
   // Calculate other metrics using filtered data
   const timeSeriesData = React.useMemo(() => getTimeSeriesData(filteredData), [filteredData])

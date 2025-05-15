@@ -16,7 +16,7 @@ export type FilterState = {
   }
 }
 
-type FilterContextType = {
+export type FilterContextType = {
   filters: FilterState
   setFilters: (filters: Partial<FilterState>) => void
   resetFilters: () => void
@@ -40,10 +40,23 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
   const [filters, setFiltersState] = useState<FilterState>(initialFilters)
 
   const setFilters = (newFilters: Partial<FilterState>) => {
-    setFiltersState((prev) => ({
-      ...prev,
-      ...newFilters,
-    }))
+    setFiltersState((prev) => {
+      // Special handling for date range to ensure proper update
+      if (newFilters.dateRange) {
+        return {
+          ...prev,
+          ...newFilters,
+          dateRange: {
+            ...prev.dateRange,
+            ...newFilters.dateRange
+          }
+        };
+      }
+      return {
+        ...prev,
+        ...newFilters,
+      };
+    });
   }
 
   const resetFilters = () => {
@@ -55,7 +68,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
 
 export function useFilters() {
   const context = useContext(FilterContext)
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useFilters must be used within a FilterProvider")
   }
   return context
