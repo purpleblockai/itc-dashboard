@@ -21,7 +21,7 @@ import {
   calculateKPIs
 } from "@/lib/data-service";
 import { badgeVariants } from "@/components/ui/badge";
-import { ResponsiveContainer, LineChart as RechartsLineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import { ResponsiveContainer, LineChart as RechartsLineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Bar, Cell, LabelList } from "recharts";
 import React from "react";
 
 // Define platform colors for consistent styling
@@ -143,21 +143,25 @@ export default function PlatformInsightsPage() {
     ).sort((a, b) => a.name.localeCompare(b.name)) 
     : [];
 
-  // Graph 2: Average discount by platform
+  // Graph 2: Average discount by platform data transformation
   const platformDiscountData = !isLoading ? 
     groupByPlatform(filteredData).map(
       ([platformName, { items, platform }]) => {
         // Calculate average discount for this platform
-        const totalDiscount = items.reduce((sum, item) => sum + item.discount, 0);
+        const totalDiscount = items.reduce((sum, item) => sum + (item.discount || 0), 0);
         const avgDiscount = items.length > 0 ? totalDiscount / items.length : 0;
         
         return {
           name: platform,
-          discount: parseFloat(avgDiscount.toFixed(1))
+          discount: parseFloat(avgDiscount.toFixed(1)),
+          Discount: parseFloat(avgDiscount.toFixed(1)) // Capitalized for visualization
         };
       }
     ).sort((a, b) => a.name.localeCompare(b.name))
     : [];
+
+  // For debug purposes
+  console.log("Platform Discount Data:", platformDiscountData);
 
   // Graph 3: Trend line cards data
   // Calculate avg metrics for the most recent period
@@ -271,6 +275,12 @@ export default function PlatformInsightsPage() {
     return augmentedData;
   };
 
+  // Capitalize labels in the graph legend
+  const legendLabels = [
+    { label: "Availability", color: "#FFA500" },
+    { label: "Penetration", color: "#1E90FF" }
+  ];
+
   return (
     <div className="space-y-6">
       <div>
@@ -284,14 +294,14 @@ export default function PlatformInsightsPage() {
 
       <FilterBar />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Graph 1: Dual Bar Graph — Availability & Penetration by platform */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Graph 1: Dual Bar Graph — Availability & Penetration by platform - span 2 columns in larger screens */}
         <Card className="card-hover col-span-2">
           <CardHeader>
             <CardTitle>
               Availability & Penetration by Platform
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="mb-10">
               Comparing key metrics across platforms
             </CardDescription>
           </CardHeader>
@@ -303,8 +313,12 @@ export default function PlatformInsightsPage() {
             ) : (
               platformMetricsData && platformMetricsData.length > 0 ? (
                 <BarChart
-                  data={platformMetricsData}
-                  categories={["availability", "penetration"]}
+                  data={platformMetricsData.map(item => ({
+                    ...item,
+                    Availability: item.availability,
+                    Penetration: item.penetration,
+                  }))}
+                  categories={["Availability", "Penetration"]}
                   index="name"
                   colors={["#ff6d00", "#0088fe"]}
                   valueFormatter={(value: number) => `${value}%`}
@@ -322,30 +336,38 @@ export default function PlatformInsightsPage() {
         </Card>
 
         {/* Graph 2: Bar Graph — Average discount by platform */}
-        <Card className="card-hover">
+        <Card className="card-hover shadow-lg col-span-1 lg:col-span-1">
           <CardHeader>
-            <CardTitle>Average Discount by Platform</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-xl dashboard-text">
+              Average Discount by Platform
+            </CardTitle>
+            <CardDescription className="mb-6">
               Discount percentages offered on different platforms
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="h-[400px]">
             {isLoading ? (
-              <div className="h-[300px]">
+              <div className="h-full w-full">
                 <Skeleton className="h-full w-full" />
               </div>
             ) : (
               platformDiscountData && platformDiscountData.length > 0 ? (
-                <BarChart
-                  data={platformDiscountData}
-                  categories={["discount"]}
-                  index="name"
-                  colors={["#00c49f"]}
-                  valueFormatter={(value: number) => `${value}%`}
-                  showLegend={false}
-                  showGridLines={true}
-                  className="h-[300px]"
-                />
+                <div className="flex flex-col h-full justify-center space-y-6 py-2">
+                  {platformDiscountData.map((platform, index) => (
+                    <div key={index} className="flex flex-col">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-sm font-medium">{platform.name}</span>
+                        <span className="text-sm font-medium">{platform.Discount}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-4 dark:bg-gray-700">
+                        <div 
+                          className="bg-[#00c49f] h-4 rounded-full" 
+                          style={{ width: `${Math.min(100, platform.Discount * 3)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
                   <p className="text-muted-foreground">No discount data available</p>
@@ -355,12 +377,12 @@ export default function PlatformInsightsPage() {
           </CardContent>
         </Card>
 
-        {/* Metrics Cards */}
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        {/* Metrics Cards - span full width in all screen sizes */}
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-4 col-span-2 lg:col-span-3">
           {/* Penetration */}
-          <Card className="col-span-1">
+          <Card className="col-span-1 shadow-lg rounded-lg border-t-4 border-t-blue-500 hover:shadow-xl transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-md font-medium">
                 Penetration
               </CardTitle>
               <div className={badgeVariants({ variant: "outline" })}>
@@ -370,19 +392,19 @@ export default function PlatformInsightsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-bold mt-2">
                 {latestMetrics?.penetration || 0}%
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground mt-2">
                 Listed Pincodes / Serviceable Pincodes
               </p>
             </CardContent>
           </Card>
 
           {/* Availability */}
-          <Card className="col-span-1">
+          <Card className="col-span-1 shadow-lg rounded-lg border-t-4 border-t-orange-500 hover:shadow-xl transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-md font-medium">
                 Availability
               </CardTitle>
               <div className={badgeVariants({ variant: "outline" })}>
@@ -392,19 +414,19 @@ export default function PlatformInsightsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-bold mt-2">
                 {latestMetrics?.availability || 0}%
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground mt-2">
                 Available Pincodes / Listed Pincodes
               </p>
             </CardContent>
           </Card>
 
           {/* Coverage */}
-          <Card className="col-span-1">
+          <Card className="col-span-1 shadow-lg rounded-lg border-t-4 border-t-green-500 hover:shadow-xl transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-md font-medium">
                 Coverage
               </CardTitle>
               <div className={badgeVariants({ variant: "outline" })}>
@@ -414,19 +436,19 @@ export default function PlatformInsightsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-bold mt-2">
                 {latestMetrics?.coverage || 0}%
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground mt-2">
                 Availability % × Penetration %
               </p>
             </CardContent>
           </Card>
 
           {/* Discount */}
-          <Card className="col-span-1">
+          <Card className="col-span-1 shadow-lg rounded-lg border-t-4 border-t-purple-500 hover:shadow-xl transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-md font-medium">
                 Avg. Discount
               </CardTitle>
               <div className={badgeVariants({ variant: "outline" })}>
@@ -436,10 +458,10 @@ export default function PlatformInsightsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-bold mt-2">
                 {latestMetrics?.discount || 0}%
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground mt-2">
                 Average discount across all products
               </p>
             </CardContent>

@@ -400,7 +400,7 @@ export default function RegionalAnalysisPage() {
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle className="text-xl dashboard-text">
-                      {viewType === "city" ? "City-wise Heatmap" : `Pincode Heatmap: ${selectedCity ? selectedCity.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : ''}`}
+                      {viewType === "city" ? "City-Wise Heatmap" : "Pin-Wise Heatmap"}
                     </CardTitle>
                     <CardDescription>
                       {viewType === "city" 
@@ -410,18 +410,18 @@ export default function RegionalAnalysisPage() {
                   </div>
                   <div className="flex space-x-2">
                     <Button 
-                      variant={heatmapType === "availability" ? "default" : "outline"} 
-                      size="sm"
-                      onClick={() => handleHeatmapTypeChange("availability")}
-                    >
-                      Availability
-                    </Button>
-                    <Button 
                       variant={heatmapType === "coverage" ? "default" : "outline"} 
                       size="sm"
                       onClick={() => handleHeatmapTypeChange("coverage")}
                     >
                       Coverage
+                    </Button>
+                    <Button 
+                      variant={heatmapType === "availability" ? "default" : "outline"} 
+                      size="sm"
+                      onClick={() => handleHeatmapTypeChange("availability")}
+                    >
+                      Availability
                     </Button>
                     <Button 
                       variant={heatmapType === "penetration" ? "default" : "outline"} 

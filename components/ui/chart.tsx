@@ -163,7 +163,11 @@ export function BarChart({
           {yAxisLabel && <Label value={yAxisLabel} angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: '12px', fill: '#666' }} />}
         </YAxis>
         <Tooltip
-          formatter={(value: any) => (typeof valueFormatter === "function" ? [valueFormatter(value), "Value"] : [value, "Value"])}
+          formatter={(value: any, name: string) => {
+            if (name === "Availability") return [typeof valueFormatter === "function" ? valueFormatter(value) : value, "Availability"];
+            if (name === "Penetration") return [typeof valueFormatter === "function" ? valueFormatter(value) : value, "Penetration"];
+            return [typeof valueFormatter === "function" ? valueFormatter(value) : value, name];
+          }}
           contentStyle={{ borderRadius: "6px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" }}
           labelStyle={{ fontWeight: "bold", marginBottom: "4px" }}
         />
