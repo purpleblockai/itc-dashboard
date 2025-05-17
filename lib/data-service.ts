@@ -377,34 +377,32 @@ function calculatePenetration(data: ProcessedData[]): number {
     }
   });
   
-  // Listed pincodes are those where at least one product has "Yes" or "No" availability
-  const listedPincodes = new Set();
-  pincodeMap.forEach((items, pincode) => {
-    const isListed = items.some(item => 
-      item.availability === "Yes" || 
-      item.availability === "No"
-    );
-    if (isListed) {
-      listedPincodes.add(pincode);
-    }
-  });
+  // Get all items in serviceable pincodes
+  const serviceableItems = data.filter(item => 
+    serviceablePincodes.has(item.pincode)
+  );
   
-  const serviceablePincodesCount = serviceablePincodes.size;
-  const listedPincodesCount = listedPincodes.size;
+  // Count items with "Yes" or "No" availability (Listed items)
+  const listedItems = serviceableItems.filter(item => 
+    item.availability === "Yes" || item.availability === "No"
+  ).length;
+  
+  // Total items in serviceable pincodes
+  const totalItems = serviceableItems.length;
   
   console.log(`[CALC] Penetration Calculation:
-    Serviceable Pincodes: ${serviceablePincodesCount}
-    Listed Pincodes: ${listedPincodesCount}
+    Serviceable Items: ${totalItems}
+    Listed Items: ${listedItems}
     Serviceable Pincodes Sample: ${Array.from(serviceablePincodes).slice(0, 3)}
   `);
   
-  if (serviceablePincodesCount === 0) {
-    console.log(`[CALC] Penetration: 0% (no serviceable pincodes)`);
+  if (totalItems === 0) {
+    console.log(`[CALC] Penetration: 0% (no serviceable items)`);
     return 0;
   }
   
-  // Penetration = Number of Listed Pincodes / Number of Serviceable Pincodes
-  const penetration = (listedPincodesCount / serviceablePincodesCount) * 100;
+  // Penetration = Number of Listed Items / Total Serviceable Items
+  const penetration = (listedItems / totalItems) * 100;
   console.log(`[CALC] Penetration: ${penetration.toFixed(2)}%`);
   
   return penetration;
@@ -510,112 +508,214 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     };
   }
 
-  // Extract client name from data
+  // Extract client name from data, strictly using the clientName field
   const clientName = data.find(item => item.clientName)?.clientName || '';
-
-  // Group data by city/region
-  const regionMap = new Map<string, ProcessedData[]>();
-  data.forEach(item => {
-    const region = item.city;
-    if (!regionMap.has(region)) {
-      regionMap.set(region, []);
+  
+  console.log(`[INSIGHTS] Identified client name: "${clientName}"`);
+  
+  // If no client name found, return empty data
+  if (!clientName) {
+    console.log(`[INSIGHTS] Error: No client name found in the data!`);
+    return {
+      lowestCoverageRegion: { name: "-", value: 0, delta: 0, competitorCoverage: 0 },
+      highestAvailabilityDeltaRegion: { name: "-", value: 0, delta: 0 },
+      highestAvailabilityDeltaFromCompetitors: { name: "-", value: 0, competitors: 0, delta: 0 }
+    };
+  }
+  
+  // First separate client items from competitor items in the full dataset
+  // Client items are where the brand matches the client name (the client's own brand)
+  const allClientItems = data.filter(item => 
+    item.brand === clientName
+  );
+  
+  // Competitor items are where the brand doesn't match the client name
+  const allCompetitorItems = data.filter(item => 
+    item.brand && item.brand !== clientName && item.brand !== ""
+  );
+  
+  console.log(`[INSIGHTS] Total client brand items: ${allClientItems.length}, competitor brand items: ${allCompetitorItems.length}`);
+  
+  if (allClientItems.length === 0) {
+    console.log(`[INSIGHTS] Warning: No items found with brand matching client name "${clientName}"`);
+    // Fall back to using clientName field if no brand matches are found
+    const altClientItems = data.filter(item => item.clientName === clientName);
+    console.log(`[INSIGHTS] Falling back to clientName filter: ${altClientItems.length} items found`);
+    if (altClientItems.length > 0) {
+      console.log(`[INSIGHTS] Sample item:`, altClientItems[0]);
     }
-    regionMap.get(region)!.push(item);
+  } else {
+    console.log(`[INSIGHTS] Client sample:`, allClientItems.slice(0, 1).map(item => ({ brand: item.brand, clientName: item.clientName, city: item.city })));
+    console.log(`[INSIGHTS] Competitor sample:`, allCompetitorItems.slice(0, 1).map(item => ({ brand: item.brand, clientName: item.clientName, city: item.city })));
+  }
+  
+  // Group data by city/region - for client items only
+  const clientRegionMap = new Map<string, ProcessedData[]>();
+  allClientItems.forEach(item => {
+    const region = item.city;
+    if (!clientRegionMap.has(region)) {
+      clientRegionMap.set(region, []);
+    }
+    clientRegionMap.get(region)!.push(item);
   });
+  
+  // Group data by city/region - for competitor items only
+  const competitorRegionMap = new Map<string, ProcessedData[]>();
+  allCompetitorItems.forEach(item => {
+    const region = item.city;
+    if (!competitorRegionMap.has(region)) {
+      competitorRegionMap.set(region, []);
+    }
+    competitorRegionMap.get(region)!.push(item);
+  });
+  
+  // Log competitor data by region for visibility
+  console.log(`[INSIGHTS] Competitor data summary by region:`);
+  competitorRegionMap.forEach((items, region) => {
+    console.log(`[INSIGHTS] ${region}: ${items.length} competitor items`);
+  });
+  
+  // Get all regions where both client and competitors have data
+  const commonRegions = Array.from(clientRegionMap.keys()).filter(region => 
+    competitorRegionMap.has(region)
+  );
+  
+  // Get all regions where both client and competitors have data for more comprehensive analysis
+  const allClientRegions = Array.from(clientRegionMap.keys());
+  const allCompetitorRegions = Array.from(competitorRegionMap.keys());
+  const allRegions = Array.from(new Set([...allClientRegions, ...allCompetitorRegions]));
+  
+  console.log(`[INSIGHTS] Common regions with both client and competitor data: ${commonRegions.length}`);
+  console.log(`[INSIGHTS] All unique regions in dataset: ${allRegions.length}`);
 
   // Calculate coverage and availability for each region
-  const regionMetrics = Array.from(regionMap.entries()).map(([name, items]) => {
-    // Group items by pincode
-    const pincodeMap = new Map<string, ProcessedData[]>();
-    items.forEach(item => {
-      if (!pincodeMap.has(item.pincode)) {
-        pincodeMap.set(item.pincode, []);
+  const regionMetrics = allRegions.map(region => {
+    const clientItems = clientRegionMap.get(region) || [];
+    const competitorItems = competitorRegionMap.get(region) || [];
+    
+    // Process client items
+    // --------
+    // Group client items by pincode to determine serviceable pincodes
+    const clientPincodeMap = new Map<string, ProcessedData[]>();
+    clientItems.forEach(item => {
+      if (!clientPincodeMap.has(item.pincode)) {
+        clientPincodeMap.set(item.pincode, []);
       }
-      pincodeMap.get(item.pincode)!.push(item);
+      clientPincodeMap.get(item.pincode)!.push(item);
     });
     
-    // Identify serviceable pincodes
-    const serviceablePincodes = new Set();
-    pincodeMap.forEach((pincodeItems, pincode) => {
+    // Identify serviceable pincodes for client
+    const clientServiceablePincodes = new Set();
+    clientPincodeMap.forEach((pincodeItems, pincode) => {
       const isServiceable = pincodeItems.some(item => 
         item.availability === "Yes" || 
         item.availability === "No" || 
         item.availability === "Item Not Found"
       );
       if (isServiceable) {
-        serviceablePincodes.add(pincode);
+        clientServiceablePincodes.add(pincode);
       }
     });
     
-    // Get all items in serviceable pincodes
-    const serviceableItems = items.filter(item => 
-      serviceablePincodes.has(item.pincode)
+    // Get all client items in serviceable pincodes
+    const clientServiceableItems = clientItems.filter(item => 
+      clientServiceablePincodes.has(item.pincode)
     );
     
-    // Count items with "Yes" or "No" availability (Listed items)
-    const listedItems = serviceableItems.filter(item => 
+    // Count client items with "Yes" or "No" availability (Listed items)
+    const clientListedItems = clientServiceableItems.filter(item => 
       item.availability === "Yes" || item.availability === "No"
     ).length;
     
-    // Count available items (Yes availability)
-    const availableItems = serviceableItems.filter(item => 
+    // Count client available items (Yes availability)
+    const clientAvailableItems = clientServiceableItems.filter(item => 
       item.availability === "Yes"
     ).length;
     
-    // Total items in serviceable pincodes
-    const totalItems = serviceableItems.length;
-    
-    // Calculate metrics
-    const penetration = totalItems > 0 ? (listedItems / totalItems) * 100 : 0;
-    const availability = listedItems > 0 ? (availableItems / listedItems) * 100 : 0;
-    const coverage = totalItems > 0 ? (availableItems / totalItems) * 100 : 0;
-    
-    // Separate client and competitor data
-    const clientItems = serviceableItems.filter(item => 
-      item.brand === clientName || item.clientName === clientName
-    );
-    
-    const competitorItems = serviceableItems.filter(item => 
-      item.brand !== clientName
-    );
+    // Total client items in serviceable pincodes
+    const clientTotalItems = clientServiceableItems.length;
     
     // Calculate client metrics
-    const clientListedItems = clientItems.filter(item => 
-      item.availability === "Yes" || item.availability === "No"
-    ).length;
-    
-    const clientAvailableItems = clientItems.filter(item => 
-      item.availability === "Yes"
-    ).length;
-    
-    const clientTotalItems = clientItems.length;
-    
     const clientPenetration = clientTotalItems > 0 ? (clientListedItems / clientTotalItems) * 100 : 0;
     const clientAvailability = clientListedItems > 0 ? (clientAvailableItems / clientListedItems) * 100 : 0;
     const clientCoverage = clientTotalItems > 0 ? (clientAvailableItems / clientTotalItems) * 100 : 0;
     
-    // Calculate competitor metrics
-    const competitorListedItems = competitorItems.filter(item => 
+    // Process competitor items
+    // --------
+    // Group competitor items by pincode
+    const competitorPincodeMap = new Map<string, ProcessedData[]>();
+    competitorItems.forEach(item => {
+      if (!competitorPincodeMap.has(item.pincode)) {
+        competitorPincodeMap.set(item.pincode, []);
+      }
+      competitorPincodeMap.get(item.pincode)!.push(item);
+    });
+    
+    // Identify serviceable pincodes for competitors
+    const competitorServiceablePincodes = new Set();
+    competitorPincodeMap.forEach((pincodeItems, pincode) => {
+      const isServiceable = pincodeItems.some(item => 
+        item.availability === "Yes" || 
+        item.availability === "No" || 
+        item.availability === "Item Not Found"
+      );
+      if (isServiceable) {
+        competitorServiceablePincodes.add(pincode);
+      }
+    });
+    
+    // Get all competitor items in serviceable pincodes
+    const competitorServiceableItems = competitorItems.filter(item => 
+      competitorServiceablePincodes.has(item.pincode)
+    );
+    
+    // Count competitor items with "Yes" or "No" availability (Listed items)
+    const competitorListedItems = competitorServiceableItems.filter(item => 
       item.availability === "Yes" || item.availability === "No"
     ).length;
     
-    const competitorAvailableItems = competitorItems.filter(item => 
+    // Count competitor available items (Yes availability)
+    const competitorAvailableItems = competitorServiceableItems.filter(item => 
       item.availability === "Yes"
     ).length;
     
-    const competitorTotalItems = competitorItems.length;
+    // Total competitor items in serviceable pincodes
+    const competitorTotalItems = competitorServiceableItems.length;
     
+    // Calculate competitor metrics
     const competitorPenetration = competitorTotalItems > 0 ? (competitorListedItems / competitorTotalItems) * 100 : 0;
     const competitorAvailability = competitorListedItems > 0 ? (competitorAvailableItems / competitorListedItems) * 100 : 0;
     const competitorCoverage = competitorTotalItems > 0 ? (competitorAvailableItems / competitorTotalItems) * 100 : 0;
     
+    // Log detailed competitor metrics for this region
+    if (competitorItems.length > 0) {
+      console.log(`[INSIGHTS] ${region} competitor metrics:
+        Total competitor items: ${competitorItems.length}
+        Serviceable competitor items: ${competitorServiceableItems.length}
+        Listed competitor items: ${competitorListedItems}
+        Available competitor items: ${competitorAvailableItems}
+        Competitor coverage: ${competitorCoverage.toFixed(1)}%
+        Competitor availability: ${competitorAvailability.toFixed(1)}%
+        Competitor penetration: ${competitorPenetration.toFixed(1)}%
+      `);
+      
+      // If client data also exists, show comparison
+      if (clientItems.length > 0) {
+        console.log(`[INSIGHTS] ${region} comparison:
+          Client coverage: ${clientCoverage.toFixed(1)}% vs Competitor coverage: ${competitorCoverage.toFixed(1)}%
+          Difference: ${(clientCoverage - competitorCoverage).toFixed(1)}%
+        `);
+      }
+    }
+    
     // Calculate availability delta between client and competitors
-    const availabilityDeltaFromCompetitors = clientAvailability - competitorAvailability;
+    const availabilityDeltaFromCompetitors = competitorItems.length > 0 ?
+      clientAvailability - competitorAvailability : 0;
     
     // Get previous report data for delta calculation
-    // Group data by report date to get previous report
+    // First determine all report dates in the data
     const reportDates = Array.from(
-      new Set(items.map(item => {
+      new Set(clientItems.map(item => {
         if (item.reportDate instanceof Date) {
           return item.reportDate.toISOString().split("T")[0];
         } else {
@@ -631,7 +731,8 @@ function calculateRegionalInsights(data: ProcessedData[]): {
       const currentDate = reportDates[reportDates.length - 1];
       const previousDate = reportDates[reportDates.length - 2];
       
-      const currentItems = items.filter(item => {
+      // Get current report data
+      const currentClientItems = clientItems.filter(item => {
         if (item.reportDate instanceof Date) {
           return item.reportDate.toISOString().split("T")[0] === currentDate;
         } else {
@@ -639,7 +740,8 @@ function calculateRegionalInsights(data: ProcessedData[]): {
         }
       });
       
-      const previousItems = items.filter(item => {
+      // Get previous report data
+      const previousClientItems = clientItems.filter(item => {
         if (item.reportDate instanceof Date) {
           return item.reportDate.toISOString().split("T")[0] === previousDate;
         } else {
@@ -647,17 +749,20 @@ function calculateRegionalInsights(data: ProcessedData[]): {
         }
       });
       
-      if (currentItems.length > 0 && previousItems.length > 0) {
+      if (currentClientItems.length > 0 && previousClientItems.length > 0) {
+        // Calculate current metrics
+        // Use the same approach as above but for current items
+        
         // Group current items by pincode
         const currentPincodeMap = new Map<string, ProcessedData[]>();
-        currentItems.forEach(item => {
+        currentClientItems.forEach(item => {
           if (!currentPincodeMap.has(item.pincode)) {
             currentPincodeMap.set(item.pincode, []);
           }
           currentPincodeMap.get(item.pincode)!.push(item);
         });
         
-        // Identify current serviceable pincodes
+        // Identify serviceable pincodes
         const currentServiceablePincodes = new Set();
         currentPincodeMap.forEach((pincodeItems, pincode) => {
           const isServiceable = pincodeItems.some(item => 
@@ -670,39 +775,39 @@ function calculateRegionalInsights(data: ProcessedData[]): {
           }
         });
         
-        // Get all current items in serviceable pincodes
-        const currentServiceableItems = currentItems.filter(item => 
+        // Filter to serviceable items
+        const currentServiceableItems = currentClientItems.filter(item => 
           currentServiceablePincodes.has(item.pincode)
         );
         
-        // Count current items with "Yes" or "No" availability (Listed items)
+        // Calculate current metrics
         const currentListedItems = currentServiceableItems.filter(item => 
           item.availability === "Yes" || item.availability === "No"
         ).length;
         
-        // Count current available items (Yes availability)
         const currentAvailableItems = currentServiceableItems.filter(item => 
           item.availability === "Yes"
         ).length;
         
-        // Total current items in serviceable pincodes
         const currentTotalItems = currentServiceableItems.length;
         
-        // Calculate current metrics
-        const currentPenetration = currentTotalItems > 0 ? (currentListedItems / currentTotalItems) * 100 : 0;
-        const currentAvailability = currentListedItems > 0 ? (currentAvailableItems / currentListedItems) * 100 : 0;
-        const currentCoverage = currentTotalItems > 0 ? (currentAvailableItems / currentTotalItems) * 100 : 0;
+        const currentAvailability = currentListedItems > 0 ? 
+          (currentAvailableItems / currentListedItems) * 100 : 0;
         
+        const currentCoverage = currentTotalItems > 0 ? 
+          (currentAvailableItems / currentTotalItems) * 100 : 0;
+        
+        // Calculate previous metrics
         // Group previous items by pincode
         const previousPincodeMap = new Map<string, ProcessedData[]>();
-        previousItems.forEach(item => {
+        previousClientItems.forEach(item => {
           if (!previousPincodeMap.has(item.pincode)) {
             previousPincodeMap.set(item.pincode, []);
           }
           previousPincodeMap.get(item.pincode)!.push(item);
         });
         
-        // Identify previous serviceable pincodes
+        // Identify serviceable pincodes
         const previousServiceablePincodes = new Set();
         previousPincodeMap.forEach((pincodeItems, pincode) => {
           const isServiceable = pincodeItems.some(item => 
@@ -715,85 +820,131 @@ function calculateRegionalInsights(data: ProcessedData[]): {
           }
         });
         
-        // Get all previous items in serviceable pincodes
-        const previousServiceableItems = previousItems.filter(item => 
+        // Filter to serviceable items
+        const previousServiceableItems = previousClientItems.filter(item => 
           previousServiceablePincodes.has(item.pincode)
         );
         
-        // Count previous items with "Yes" or "No" availability (Listed items)
+        // Calculate previous metrics
         const previousListedItems = previousServiceableItems.filter(item => 
           item.availability === "Yes" || item.availability === "No"
         ).length;
         
-        // Count previous available items (Yes availability)
         const previousAvailableItems = previousServiceableItems.filter(item => 
           item.availability === "Yes"
         ).length;
         
-        // Total previous items in serviceable pincodes
         const previousTotalItems = previousServiceableItems.length;
         
-        // Calculate previous metrics
-        const previousPenetration = previousTotalItems > 0 ? (previousListedItems / previousTotalItems) * 100 : 0;
-        const previousAvailability = previousListedItems > 0 ? (previousAvailableItems / previousListedItems) * 100 : 0;
-        const previousCoverage = previousTotalItems > 0 ? (previousAvailableItems / previousTotalItems) * 100 : 0;
+        const previousAvailability = previousListedItems > 0 ? 
+          (previousAvailableItems / previousListedItems) * 100 : 0;
         
+        const previousCoverage = previousTotalItems > 0 ? 
+          (previousAvailableItems / previousTotalItems) * 100 : 0;
+        
+        // Calculate deltas
         coverageDelta = currentCoverage - previousCoverage;
         availabilityDelta = currentAvailability - previousAvailability;
       }
     }
-    
-    return { 
-      name, 
-      coverage, 
-      competitorCoverage: competitorCoverage,
-      coverageDelta, 
-      availability, 
+
+    return {
+      name: region,
+      clientName,
+      coverage: clientCoverage,
+      competitorCoverage,
+      coverageDelta,
+      availability: clientAvailability,
       availabilityDelta,
       availabilityDeltaFromCompetitors,
-      competitorAvailability
+      competitorAvailability,
+      // Add some debug info
+      clientItemCount: clientItems.length,
+      competitorItemCount: competitorItems.length,
+      hasClientData: clientItems.length > 0,
+      hasCompetitorData: competitorItems.length > 0
     };
+  }).filter(region => {
+    // Keep regions that have at least one kind of data
+    return region.clientItemCount > 0 || region.competitorItemCount > 0;
   });
   
-  // Find lowest coverage region
-  const lowestCoverageRegion = regionMetrics
-    .filter(region => region.name !== "-" && region.coverage > 0)
-    .sort((a, b) => a.coverage - b.coverage)[0] || 
-    { name: "-", coverage: 0, coverageDelta: 0, competitorCoverage: 0 };
+  console.log(`[INSIGHTS] Calculated metrics for ${regionMetrics.length} regions`);
+
+  // Calculate overall competitor coverage across all regions
+  const allCompetitorMetrics = regionMetrics.filter(region => region.hasCompetitorData);
+  const aggregatedCompetitorCoverage = allCompetitorMetrics.length > 0 ?
+    allCompetitorMetrics.reduce((sum, region) => sum + region.competitorCoverage, 0) / allCompetitorMetrics.length : 0;
+  
+  console.log(`[INSIGHTS] Aggregated competitor coverage across all regions: ${aggregatedCompetitorCoverage.toFixed(1)}%`);
+  
+  // Find lowest coverage region for client brand - only consider regions where client brand exists
+  const clientRegionMetrics = regionMetrics.filter(region => region.hasClientData);
+  
+  // Type-check the fallback object to match the properties of regionMetrics items
+  const emptyRegionMetric = { 
+    name: "-", 
+    coverage: 0, 
+    coverageDelta: 0, 
+    competitorCoverage: 0,
+    availability: 0,
+    availabilityDelta: 0,
+    competitorAvailability: 0,
+    availabilityDeltaFromCompetitors: 0,
+    clientItemCount: 0,
+    competitorItemCount: 0,
+    hasClientData: false,
+    hasCompetitorData: false
+  };
+  
+  const lowestCoverageRegion = clientRegionMetrics.length > 0 ?
+    clientRegionMetrics.sort((a, b) => a.coverage - b.coverage)[0] || emptyRegionMetric :
+    emptyRegionMetric;
+  
+  // For availability comparison, we need to compare client and competitor in the same region
+  // So we'll only look at regions where both client and competitor data exist
+  const regionsWithBothData = regionMetrics.filter(region => 
+    region.hasClientData && region.hasCompetitorData
+  );
   
   // Find regions with the largest negative availability gap compared to competitors
-  // Prioritize regions where competitor availability is significantly higher than client
-  const largestNegativeAvailabilityGap = regionMetrics
+  const largestNegativeAvailabilityGap = regionsWithBothData
     .filter(region => 
-      region.name !== "-" && 
       region.availability > 0 && 
       region.competitorAvailability > 0 &&
       region.availabilityDeltaFromCompetitors < 0 // Negative delta means competitors have higher availability
     )
     .sort((a, b) => a.availabilityDeltaFromCompetitors - b.availabilityDeltaFromCompetitors)[0] || 
     // Fallback to the region with lowest absolute availability if no negative deltas exist
-    regionMetrics
-      .filter(region => region.name !== "-" && region.availability > 0 && region.competitorAvailability > 0)
-      .sort((a, b) => a.availability - b.availability)[0] ||
-    { name: "-", availability: 0, competitorAvailability: 0, availabilityDeltaFromCompetitors: 0 };
+    (regionsWithBothData.length > 0 ? 
+      regionsWithBothData.sort((a, b) => a.availability - b.availability)[0] :
+      emptyRegionMetric);
   
+  // Log the results
+  console.log(`[INSIGHTS] Lowest coverage region: ${lowestCoverageRegion.name} (${lowestCoverageRegion.coverage.toFixed(1)}%)`);
+  console.log(`[INSIGHTS] Competitor coverage in this region: ${lowestCoverageRegion.competitorCoverage.toFixed(1)}%`);
+  console.log(`[INSIGHTS] Aggregated competitor coverage across all regions: ${aggregatedCompetitorCoverage.toFixed(1)}%`);
+  
+  console.log(`[INSIGHTS] Largest availability gap: ${largestNegativeAvailabilityGap.name} (Client: ${largestNegativeAvailabilityGap.availability.toFixed(1)}%, Competitors: ${largestNegativeAvailabilityGap.competitorAvailability.toFixed(1)}%)`);
+  
+  // Return lowest coverage region, using the region-specific competitor coverage
   return {
     lowestCoverageRegion: { 
       name: lowestCoverageRegion.name, 
       value: lowestCoverageRegion.coverage, 
-      delta: lowestCoverageRegion.coverageDelta,
-      competitorCoverage: lowestCoverageRegion.competitorCoverage
+      delta: lowestCoverageRegion.coverage - lowestCoverageRegion.competitorCoverage, // Calculate direct difference between client and competitor
+      competitorCoverage: lowestCoverageRegion.competitorCoverage // Use the competitor coverage from this specific region
     },
     highestAvailabilityDeltaRegion: { 
       name: largestNegativeAvailabilityGap.name, 
       value: largestNegativeAvailabilityGap.availability, 
-      delta: largestNegativeAvailabilityGap.availabilityDelta
+      delta: largestNegativeAvailabilityGap.availabilityDelta || 0
     },
     highestAvailabilityDeltaFromCompetitors: {
       name: largestNegativeAvailabilityGap.name,
       value: largestNegativeAvailabilityGap.availability,
       competitors: largestNegativeAvailabilityGap.competitorAvailability,
-      delta: largestNegativeAvailabilityGap.availabilityDeltaFromCompetitors
+      delta: largestNegativeAvailabilityGap.availabilityDeltaFromCompetitors || 0
     }
   };
 }
