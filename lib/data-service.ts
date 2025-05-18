@@ -965,11 +965,19 @@ function calculateStockOutPercentage(data: ProcessedData[]): number {
 function calculateAverageDiscount(data: ProcessedData[]): number {
   if (data.length === 0) return 0;
   
-  const totalDiscount = data.reduce(
+  // Filter items with valid discount values
+  const validItems = data.filter(item => 
+    typeof item.discount === 'number' && !isNaN(item.discount)
+  );
+  
+  if (validItems.length === 0) return 0;
+  
+  const totalDiscount = validItems.reduce(
     (sum, item) => sum + item.discount,
     0
   );
-  return totalDiscount / data.length;
+  
+  return totalDiscount / validItems.length;
 }
 
 // Function to calculate KPIs
@@ -1029,12 +1037,22 @@ export function calculateKPIs(data: ProcessedData[]) {
 
   // Calculate average discount - specifically for client data
   const clientData = data.filter(item => item.clientName); // Only filter by clientName when client_name exists
-  const totalDiscount = clientData.length 
-    ? clientData.reduce((sum, item) => sum + item.discount, 0) 
-    : data.reduce((sum, item) => sum + item.discount, 0);
-  const avgDiscount = clientData.length 
-    ? totalDiscount / clientData.length 
-    : (data.length ? totalDiscount / data.length : 0);
+  
+  // Filter out items with invalid discount values
+  const validClientData = clientData.filter(item => 
+    typeof item.discount === 'number' && !isNaN(item.discount)
+  );
+  const validNonClientData = data.filter(item => 
+    typeof item.discount === 'number' && !isNaN(item.discount)
+  );
+  
+  const totalDiscount = validClientData.length 
+    ? validClientData.reduce((sum, item) => sum + item.discount, 0) 
+    : (validNonClientData.length ? validNonClientData.reduce((sum, item) => sum + item.discount, 0) : 0);
+  
+  const avgDiscount = validClientData.length 
+    ? totalDiscount / validClientData.length 
+    : (validNonClientData.length ? totalDiscount / validNonClientData.length : 0);
   
   console.log(`[CALC] Average Discount: ${avgDiscount.toFixed(2)}%`);
 
@@ -1552,8 +1570,12 @@ export function getBrandData(data: ProcessedData[]): {
     .filter(([name]) => name) // Filter out empty brand names
     .map(([name, items]) => {
       // Calculate average discount
-      const totalDiscount = items.reduce((sum, item) => sum + item.discount, 0);
-      const avgDiscount = Math.round((totalDiscount / items.length) * 10) / 10;
+      const validItems = items.filter(item => 
+        typeof item.discount === 'number' && !isNaN(item.discount)
+      );
+      const totalDiscount = validItems.reduce((sum, item) => sum + item.discount, 0);
+      const avgDiscount = validItems.length > 0 ? 
+        Math.round((totalDiscount / validItems.length) * 10) / 10 : 0;
 
       // Calculate availability percentage
       const availableItems = items.filter(item => item.availability === "Yes").length;
