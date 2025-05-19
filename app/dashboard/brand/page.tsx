@@ -432,6 +432,14 @@ export default function BrandEvaluationPage() {
       discount: brand.avgDiscount || 0,
     })) : [];
 
+  // For a single brand case (when filtering), create a metrics-based radar
+  const singleBrandRadarData = radarData.length === 1 && radarData[0] ? [
+    { name: "Availability", value: radarData[0].availability },
+    { name: "Penetration", value: radarData[0].penetration },
+    { name: "Coverage", value: radarData[0].coverage },
+    { name: "Discount", value: radarData[0].discount },
+  ] : [];
+
   // Format data for brand performance comparison
   const brandComparisonChartData = !isLoading ? brandData
     .filter(brand => brand.skuCount > 0)
@@ -607,15 +615,63 @@ export default function BrandEvaluationPage() {
           <CardContent className="h-[450px] p-6">
             {isLoading ? (
               <Skeleton className="h-full w-full" />
-            ) : radarData && radarData.length > 0 ? (
+            ) : radarData && radarData.length > 1 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsRadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
                   <PolarGrid stroke="#e5e7eb" />
                   <PolarAngleAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
                   <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#6b7280' }} />
-                  <Radar name="Availability" dataKey="availability" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.6} />
-                  <Radar name="Penetration" dataKey="penetration" stroke="#F97316" fill="#F97316" fillOpacity={0.6} />
-                  <Radar name="Coverage" dataKey="coverage" stroke="#10B981" fill="#10B981" fillOpacity={0.6} />
+                  {/* Calculate average values for each metric to determine render order */}
+                  {(() => {
+                    // Calculate average values for each metric
+                    const avgAvailability = radarData.reduce((sum, item) => sum + item.availability, 0) / radarData.length;
+                    const avgPenetration = radarData.reduce((sum, item) => sum + item.penetration, 0) / radarData.length;
+                    const avgCoverage = radarData.reduce((sum, item) => sum + item.coverage, 0) / radarData.length;
+                    
+                    // Create array of metrics with their values and colors
+                    const metrics = [
+                      { name: "Availability", key: "availability", value: avgAvailability, color: "#0047AB" }, // Cobalt Blue (darker)
+                      { name: "Penetration", key: "penetration", value: avgPenetration, color: "#D35400" }, // Darker orange 
+                      { name: "Coverage", key: "coverage", value: avgCoverage, color: "#00865A" } // Darker green
+                    ];
+                    
+                    // Sort by value - highest first (rendered at bottom)
+                    const sortedMetrics = [...metrics].sort((a, b) => b.value - a.value);
+                    
+                    // Return radar components in the sorted order
+                    return sortedMetrics.map(metric => (
+                      <Radar 
+                        key={metric.key}
+                        name={metric.name} 
+                        dataKey={metric.key} 
+                        stroke={metric.color} 
+                        fill={metric.color} 
+                        fillOpacity={0.7}
+                      />
+                    ));
+                  })()}
+                  <Legend />
+                  <RechartsTooltip formatter={(value: any) => {
+                    if (value === null || value === undefined) return ["-", ""];
+                    return [typeof value === 'number' ? `${value.toFixed(1)}%` : value, ""];
+                  }} />
+                </RechartsRadarChart>
+              </ResponsiveContainer>
+            ) : singleBrandRadarData.length > 0 ? (
+              // Single brand mode - display metrics radar
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsRadarChart cx="50%" cy="50%" outerRadius="80%" data={singleBrandRadarData}>
+                  <PolarGrid stroke="#e5e7eb" />
+                  <PolarAngleAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#6b7280' }} />
+                  <Radar 
+                    name={radarData[0]?.name || "Brand"} 
+                    dataKey="value" 
+                    stroke="#0047AB" 
+                    fill="#0047AB" 
+                    fillOpacity={0.8}
+                    strokeWidth={2} 
+                  />
                   <Legend />
                   <RechartsTooltip formatter={(value: any) => {
                     if (value === null || value === undefined) return ["-", ""];

@@ -294,6 +294,17 @@ export default function RegionalAnalysisPage() {
     }
     
     if (viewType === "pincode") {
+      // Filter choropleth data by the selected city
+      if (selectedCity) {
+        // Since choroplethData might not have city property, filter using available data
+        const pincodesByCity = filteredPincodeData
+          .filter(item => (item.city || "").toLowerCase() === selectedCity.toLowerCase())
+          .map(item => item.pincode);
+          
+        return choroplethData.filter(item => 
+          pincodesByCity.includes(item.id)
+        );
+      }
       return choroplethData;
     }
     
@@ -445,7 +456,25 @@ export default function RegionalAnalysisPage() {
                 ) : (
                   viewType === "city" ? (
                     <div className="h-[450px]">
-                      <ChoroplethMap key={`city-map-${mapKey}`} data={getActiveHeatmapData()} height={450} heatmapType={heatmapType} />
+                      <ChoroplethMap 
+                        key={`city-map-${mapKey}`} 
+                        data={getActiveHeatmapData()} 
+                        height={450} 
+                        heatmapType={heatmapType}
+                        onCellClick={(cityId) => {
+                          // Set the selected city and switch to pincode view
+                          const cityData = cityRegionalData.find(city => 
+                            (city.city || "").toLowerCase() === cityId.toLowerCase()
+                          );
+                          
+                          if (cityData?.city) {
+                            setSelectedCity(cityData.city);
+                            setViewType("pincode");
+                            // Reset map to clear any selections when switching views
+                            setMapKey(prevKey => prevKey + 1);
+                          }
+                        }}
+                      />
                     </div>
                   ) : (
                     <>
@@ -461,7 +490,7 @@ export default function RegionalAnalysisPage() {
                         </Button>
                       </div>
                       <div className="h-[450px]">
-                        <ChoroplethMap key={`pincode-map-${mapKey}`} data={choroplethData} height={450} heatmapType={heatmapType} />
+                        <ChoroplethMap key={`pincode-map-${mapKey}`} data={getActiveHeatmapData()} height={450} heatmapType={heatmapType} />
                       </div>
                     </>
                   )

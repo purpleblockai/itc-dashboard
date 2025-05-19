@@ -71,6 +71,9 @@ export default function PlatformInsightsPage() {
   const groupByPlatform = (data: ProcessedData[]) => {
     return Array.from(
       data.reduce((map, item) => {
+        // Skip items with undefined, null, or empty platform values
+        if (!item.platform) return map;
+        
         const platform = item.platform;
         
         // Initialize entry if it doesn't exist
@@ -140,7 +143,8 @@ export default function PlatformInsightsPage() {
           penetration: parseFloat(metrics.penetration.toFixed(1))
         };
       }
-    ).sort((a, b) => a.name.localeCompare(b.name)) 
+    ).filter(item => item.name) // Filter out empty platforms
+    .sort((a, b) => a.name.localeCompare(b.name)) 
     : [];
 
   // Graph 2: Average discount by platform data transformation
@@ -148,8 +152,38 @@ export default function PlatformInsightsPage() {
     groupByPlatform(filteredData).map(
       ([platformName, { items, platform }]) => {
         // Calculate average discount for this platform
-        const totalDiscount = items.reduce((sum, item) => sum + (item.discount || 0), 0);
-        const avgDiscount = items.length > 0 ? totalDiscount / items.length : 0;
+        // For each item, if discount is 0 or invalid, calculate it from MRP and selling price
+        const validItems = items.filter(item => {
+          // Check if we have valid MRP and Selling Price
+          const hasPriceData = item.mrp > 0 && !isNaN(item.sellingPrice) && !isNaN(item.mrp);
+          
+          // Use the discount field if available, otherwise try to calculate it
+          if (item.discount > 0) {
+            return true;
+          } else if (hasPriceData) {
+            // We can calculate discount from price data
+            return true;
+          }
+          return false;
+        });
+        
+        // Calculate total discount, using calculated values when necessary
+        const totalDiscount = validItems.reduce((sum, item) => {
+          // If discount is already set and valid, use it
+          if (item.discount > 0) {
+            return sum + item.discount;
+          }
+          
+          // Otherwise calculate from MRP and selling price
+          if (item.mrp > 0) {
+            const calculatedDiscount = ((item.mrp - item.sellingPrice) / item.mrp) * 100;
+            return sum + calculatedDiscount;
+          }
+          
+          return sum;
+        }, 0);
+        
+        const avgDiscount = validItems.length > 0 ? totalDiscount / validItems.length : 0;
         
         return {
           name: platform,
@@ -157,11 +191,9 @@ export default function PlatformInsightsPage() {
           Discount: parseFloat(avgDiscount.toFixed(1)) // Capitalized for visualization
         };
       }
-    ).sort((a, b) => a.name.localeCompare(b.name))
+    ).filter(item => item.name) // Extra filter to ensure no empty platform names
+    .sort((a, b) => a.name.localeCompare(b.name))
     : [];
-
-  // For debug purposes
-  console.log("Platform Discount Data:", platformDiscountData);
 
   // Graph 3: Trend line cards data
   // Calculate avg metrics for the most recent period
@@ -188,17 +220,38 @@ export default function PlatformInsightsPage() {
     // Use the updated metrics calculation function from data-service
     const metricsResult = calculateKPIs(items);
     
-    // Calculate average discount
-    const totalDiscount = items.reduce((sum, item) => sum + item.discount, 0);
-    const avgDiscount = items.length > 0 ? totalDiscount / items.length : 0;
-    
-    // Log the metrics result for debugging
-    console.log("[DEBUG] Metrics result:", {
-      penetration: metricsResult.penetration,
-      availability: metricsResult.availability,
-      coverage: metricsResult.coverage,
-      coverageMethod1: metricsResult.coverageMethod1
+    // Calculate average discount, using MRP and selling price when needed
+    const validItems = items.filter(item => {
+      // Check if we have valid MRP and Selling Price
+      const hasPriceData = item.mrp > 0 && !isNaN(item.sellingPrice) && !isNaN(item.mrp);
+      
+      // Use the discount field if available, otherwise try to calculate it
+      if (item.discount > 0) {
+        return true;
+      } else if (hasPriceData) {
+        // We can calculate discount from price data
+        return true;
+      }
+      return false;
     });
+    
+    // Calculate total discount, using calculated values when necessary
+    const totalDiscount = validItems.reduce((sum, item) => {
+      // If discount is already set and valid, use it
+      if (item.discount > 0) {
+        return sum + item.discount;
+      }
+      
+      // Otherwise calculate from MRP and selling price
+      if (item.mrp > 0) {
+        const calculatedDiscount = ((item.mrp - item.sellingPrice) / item.mrp) * 100;
+        return sum + calculatedDiscount;
+      }
+      
+      return sum;
+    }, 0);
+    
+    const avgDiscount = validItems.length > 0 ? totalDiscount / validItems.length : 0;
     
     return {
       penetration: parseFloat(metricsResult.penetration.toFixed(1)),
@@ -228,10 +281,10 @@ export default function PlatformInsightsPage() {
       };
       
       // For each platform, calculate metrics for this date
-      platformNames.forEach(platform => {
+      platformNames.filter(platform => platform).forEach(platform => {
         // Get items for this date and platform
         const platformItems = filteredData.filter(item => {
-          if (!item.reportDate) return false;
+          if (!item.reportDate || !item.platform) return false;
           return formatDateForComparison(item.reportDate) === date && 
                  item.platform === platform;
         });
@@ -241,7 +294,7 @@ export default function PlatformInsightsPage() {
           const platformMetrics = calculateKPIs(platformItems);
           dateEntry[platform] = parseFloat(platformMetrics.coverageMethod1.toFixed(1));
         } else {
-        dateEntry[platform] = 0;
+          dateEntry[platform] = 0;
         }
       });
       
@@ -370,7 +423,9 @@ export default function PlatformInsightsPage() {
                 </div>
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
-                  <p className="text-muted-foreground">No discount data available</p>
+                  <p className="text-muted-foreground">
+                    No discount data available
+                  </p>
                 </div>
               )
             )}
