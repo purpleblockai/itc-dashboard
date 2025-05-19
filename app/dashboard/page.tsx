@@ -65,16 +65,21 @@ export default function DashboardPage() {
   const getReportDates = () => {
     if (isLoading || !rawData.length) return null;
     
-    // Get unique report dates
+    // Get unique report dates in DD-MM-YYYY format
     const reportDates = Array.from(
       new Set(rawData.map(item => {
         if (item.reportDate instanceof Date) {
-          return format(item.reportDate, "MMM d, yyyy");
+          return format(item.reportDate, "dd-MM-yyyy");
         } else {
-          return format(new Date(), "MMM d, yyyy");
+          return format(new Date(), "dd-MM-yyyy");
         }
       }))
-    ).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    ).sort((a, b) => {
+      // Sort by actual date values parsed from DD-MM-YYYY
+      const [dA, mA, yA] = a.split('-').map(Number);
+      const [dB, mB, yB] = b.split('-').map(Number);
+      return new Date(yA, mA - 1, dA).getTime() - new Date(yB, mB - 1, dB).getTime();
+    });
     
     if (reportDates.length < 2) {
       return {
@@ -196,7 +201,7 @@ export default function DashboardPage() {
                   data={coverageByBrandData}
                   categories={["coverage"]}
                   index="name"
-                  colors={["#ff6d00"]}
+                  colors={["#8b5cf6"]}
                   valueFormatter={(value: number) => `${value}%`}
                   showLegend={false}
                   showGridLines={true}
@@ -299,9 +304,7 @@ export default function DashboardPage() {
                       <span className="font-semibold">{(kpis.lowestCoverageRegion as any).competitorCoverage?.toFixed(1) || '0.0'}%</span>
                     </div>
                     <div className="w-full bg-slate-800/50 rounded-full h-2.5">
-                      <div className="bg-orange-500 h-2.5 rounded-full" 
-                        style={{ width: `${(kpis.lowestCoverageRegion as any).competitorCoverage > 0 ? 
-                          Math.max((kpis.lowestCoverageRegion as any).competitorCoverage, 1) : 0}%` }}></div>
+                      <div className="bg-purple-500 h-2.5 rounded-full" style={{ width: `${(kpis.lowestCoverageRegion as any).competitorCoverage > 0 ? Math.max((kpis.lowestCoverageRegion as any).competitorCoverage, 1) : 0}%` }}></div>
                     </div>
                   </div>
                   
@@ -359,8 +362,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     <div className="w-full bg-slate-800/50 rounded-full h-2.5">
-                      <div className="bg-orange-500 h-2.5 rounded-full" 
-                        style={{ width: `${Math.max((kpis as any).highestAvailabilityDeltaFromCompetitors?.competitors || 0, 1)}%` }}></div>
+                      <div className="bg-purple-500 h-2.5 rounded-full" style={{ width: `${Math.max((kpis as any).highestAvailabilityDeltaFromCompetitors?.competitors || 0, 1)}%` }}></div>
                     </div>
                   </div>
                   

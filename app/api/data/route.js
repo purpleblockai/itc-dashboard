@@ -51,8 +51,9 @@ export async function GET(request) {
     
     // Transform the MongoDB data to match the expected format in the frontend
     const transformedData = data.map(item => {
-      // 1. parse into a JS Date
-      const dt = parseReportDate(item.Report_Date || "");
+      // 1. parse into a JS Date, handle both 'Report_Date' and 'Report Date'
+      const rawDate = item.Report_Date ?? item['Report Date'] ?? "";
+      const dt = parseReportDate(rawDate);
   
       // 2. pull out only the YYYY-MM-DD
       const dateOnly = dt.toISOString().split("T")[0];

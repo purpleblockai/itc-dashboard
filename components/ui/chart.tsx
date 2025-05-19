@@ -20,6 +20,7 @@ import {
   LabelList,
 } from "recharts"
 import { ReactElement } from "react"
+import { useTheme } from "next-themes"
 
 interface ChartProps {
   data: any[]
@@ -41,7 +42,7 @@ export function LineChart({
   data,
   categories = [],
   index = "date",
-  colors = ["#ff6d00"],
+  colors = ["#8b5cf6"],
   valueFormatter,
   showLegend = false,
   showGridLines = true,
@@ -125,7 +126,7 @@ export function BarChart({
   data,
   categories = [],
   index = "name",
-  colors = ["#ff6d00"],
+  colors = ["#8b5cf6"],
   valueFormatter,
   showLegend = false,
   showGridLines = true,
@@ -191,7 +192,7 @@ export function PieChart({
   data,
   category = "value",
   index = "name",
-  colors = ["#ff6d00", "#ff9e40", "#ffbd80", "#ffdcbf"],
+  colors = ["#8b5cf6", "#a78bfa", "#c4b5fd", "#e9d5ff"],
   valueFormatter,
   showLegend = true,
   className,
@@ -238,14 +239,31 @@ export function PieChart({
 export function ScatterChart({
   data,
   xAxisLabel = "Average Discount (%)",
-  yAxisLabel = "Availability (%)",
+  yAxisLabel = "Average Availability (%)",
   sizeKey = "skuCount",
   sizeScale = [1, 100],
   showLegend = false,
-  colors = ["#ff6d00"],
+  colors = ["#8b5cf6", "#3B82F6", "#10B981", "#FBBF24", "#8B5CF6", "#EC4899"],
   valueFormatter,
   className,
 }: ChartProps) {
+  const { resolvedTheme, theme } = useTheme();
+  const currentTheme = resolvedTheme || theme;
+  const isDarkMode = currentTheme === 'dark';
+
+  const xValues = data.map(item => item.x);
+  const yValues = data.map(item => item.y);
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues);
+  const xRange = xMax - xMin;
+  const yRange = yMax - yMin;
+  const xPadding = xRange > 0 ? xRange * 0.1 : 10;
+  const yPadding = yRange > 0 ? yRange * 0.1 : 10;
+  const xDomain: [number, number] = [Math.max(0, xMin - xPadding), Math.min(100, xMax + xPadding)];
+  const yDomain: [number, number] = [Math.max(0, yMin - yPadding), Math.min(100, yMax + yPadding)];
+
   if (!data || data.length === 0) {
     return (
       <div className="flex h-full w-full items-center justify-center">
@@ -292,11 +310,11 @@ export function ScatterChart({
           type="number" 
           name="penetration" 
           tickFormatter={formatX}
-          tick={{ fontSize: 12, fill: "#fff" }}
+          tick={{ fontSize: 12, fill: isDarkMode ? '#fff' : '#000' }}
           tickLine={{ stroke: "#888" }}
           axisLine={{ stroke: "#888" }}
-          domain={[0, 100]}
-          ticks={[0, 25, 50, 75, 100]}
+          domain={xDomain}
+          tickCount={5}
         >
           <Label 
             value={xAxisLabel} 
@@ -305,7 +323,7 @@ export function ScatterChart({
             style={{ 
               fontSize: '13px', 
               fontWeight: 'bold', 
-              fill: '#fff'
+              fill: isDarkMode ? '#fff' : '#000'
             }} 
           />
         </XAxis>
@@ -314,11 +332,11 @@ export function ScatterChart({
           type="number" 
           name="availability"
           tickFormatter={formatY}
-          tick={{ fontSize: 12, fill: "#fff" }}
+          tick={{ fontSize: 12, fill: isDarkMode ? '#fff' : '#000' }}
           tickLine={{ stroke: "#888" }}
           axisLine={{ stroke: "#888" }}
-          domain={[0, 80]}
-          ticks={[0, 15, 30, 45, 60, 75]}
+          domain={yDomain}
+          tickCount={5}
           width={80}
         >
           <Label 
@@ -329,7 +347,7 @@ export function ScatterChart({
               textAnchor: 'middle', 
               fontSize: '13px', 
               fontWeight: 'bold', 
-              fill: '#fff'
+              fill: isDarkMode ? '#fff' : '#000'
             }} 
           />
         </YAxis>
@@ -390,9 +408,9 @@ export function ScatterChart({
                 offset={15}
                 style={{
                   fontSize: 13,
-                  fill: '#fff',
+                  fill: isDarkMode ? '#fff' : '#000',
                   fontWeight: 600,
-                  textShadow: '0 0 4px #000, 0 0 4px #000'
+                  textShadow: isDarkMode ? '0 0 4px #000, 0 0 4px #000' : 'none'
                 }}
               />
             </Scatter>
@@ -410,7 +428,7 @@ const Size = ({
   cy, 
   dataKey, 
   scale = [1, 100], 
-  color = '#ff6d00' 
+  color = '#8b5cf6' 
 }: { 
   payload: any; 
   cx: any; 

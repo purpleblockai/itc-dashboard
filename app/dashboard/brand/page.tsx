@@ -588,7 +588,7 @@ export default function BrandEvaluationPage() {
                 yAxisLabel="Average Availability (%)"
                 sizeKey="size"
                 sizeScale={[20, 90]} // Slightly larger dots for better visibility
-                colors={["#F97316", "#3B82F6", "#10B981", "#FBBF24", "#8B5CF6", "#EC4899"]} // Vibrant color palette
+                colors={["#8b5cf6", "#3B82F6", "#10B981", "#FBBF24", "#8B5CF6", "#EC4899"]} // Replaced orange with purple in palette
                 valueFormatter={{
                   x: (value: number) => `${value.toFixed(1)}%`,
                   y: (value: number) => `${value.toFixed(1)}%`
@@ -631,7 +631,7 @@ export default function BrandEvaluationPage() {
                     // Create array of metrics with their values and colors
                     const metrics = [
                       { name: "Availability", key: "availability", value: avgAvailability, color: "#0047AB" }, // Cobalt Blue (darker)
-                      { name: "Penetration", key: "penetration", value: avgPenetration, color: "#D35400" }, // Darker orange 
+                      { name: "Penetration", key: "penetration", value: avgPenetration, color: "#8b5cf6" }, // Replaced orange with purple 
                       { name: "Coverage", key: "coverage", value: avgCoverage, color: "#00865A" } // Darker green
                     ];
                     
@@ -716,7 +716,7 @@ export default function BrandEvaluationPage() {
                   <Bar dataKey="Availability" fill="#3B82F6" radius={[0, 4, 4, 0]}>
                     <LabelList dataKey="Availability" position="right" formatter={(value: number) => `${value.toFixed(0)}%`} />
                   </Bar>
-                  <Bar dataKey="Penetration" fill="#F97316" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="Penetration" fill="#8b5cf6" radius={[0, 4, 4, 0]}>
                     <LabelList dataKey="Penetration" position="right" formatter={(value: number) => `${value.toFixed(0)}%`} />
                   </Bar>
                 </RechartsBarChart>

@@ -25,7 +25,7 @@ import { ResponsiveContainer, LineChart as RechartsLineChart, Line, CartesianGri
 import React from "react";
 
 // Define platform colors for consistent styling
-const PLATFORM_COLORS = ["#ff6d00", "#0088fe", "#00c49f", "#9B59B6", "#F1C40F"];
+const PLATFORM_COLORS = ["#8b5cf6", "#0088fe", "#00c49f", "#9B59B6", "#F1C40F"];
 
 export default function PlatformInsightsPage() {
   const { isLoading, platformData, platformShareData, filteredData, timeSeriesData } = useData();
@@ -339,7 +339,7 @@ export default function PlatformInsightsPage() {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Platform Insights</h2>
         <p className="text-muted-foreground">
-          Compare performance across Swiggy, Flipkart, Zepto, and Blinkit.
+          Compare performance across Swiggy Instamart, Zepto, and Blinkit.
         </p>
       </div>
 
@@ -373,7 +373,7 @@ export default function PlatformInsightsPage() {
                   }))}
                   categories={["Availability", "Penetration"]}
                   index="name"
-                  colors={["#ff6d00", "#0088fe"]}
+                  colors={["#8b5cf6", "#0088fe"]}
                   valueFormatter={(value: number) => `${value}%`}
                   showLegend={true}
                   showGridLines={true}
