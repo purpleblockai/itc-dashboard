@@ -999,7 +999,6 @@ export function calculateKPIs(data: ProcessedData[]) {
       listedSKUs: 0,
       availableSKUs: 0,
       notAvailableSKUs: 0,
-      skuTracks: 0,
       penetration: 0,
       availability: 0,
       coverage: 0,
@@ -1027,9 +1026,9 @@ export function calculateKPIs(data: ProcessedData[]) {
     };
   }
 
-  // Calculate total number of unique SKUs
-  const uniqueSkus = new Set(data.map((item) => item.skuId)).size;
-  console.log(`[CALC] Unique SKUs: ${uniqueSkus}`);
+  // Calculate total number of unique SKUs (counted by Unique_Product_ID)
+  const uniqueSkus = new Set(data.map((item) => item.productId)).size;
+  console.log(`[CALC] Unique SKUs (by Unique_Product_ID): ${uniqueSkus}`);
 
   // Calculate total number of unique pincodes
   const totalPincodes = new Set(data.map((item) => item.pincode)).size;
@@ -1178,7 +1177,6 @@ export function calculateKPIs(data: ProcessedData[]) {
     listedSKUs,
     availableSKUs,
     notAvailableSKUs,
-    skuTracks: uniqueSkus,
     penetration: overallPenetration,
     availability: overallAvailability,
     coverage: overallCoverage,

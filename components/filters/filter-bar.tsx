@@ -21,8 +21,12 @@ type DateRange = { from?: Date; to?: Date };
 export function FilterBar() {
   const { filters, setFilters, resetFilters } = useFilters()
   const { rawData, isLoading } = useData()
-  const [open, setOpen] = useState(false)
+  const [brandOpen, setBrandOpen] = useState(false)
+  const [productOpen, setProductOpen] = useState(false)
+  const [platformOpen, setPlatformOpen] = useState(false)
+  const [cityOpen, setCityOpen] = useState(false)
   const [calendarOpen, setCalendarOpen] = useState(false)
+  const [products, setProducts] = useState<{ label: string; value: string }[]>([])
 
   // Generate filter options from actual data
   const [brands, setBrands] = useState<{ label: string; value: string }[]>([{ label: "All Brands", value: "all" }])
@@ -59,46 +63,92 @@ export function FilterBar() {
           value: city,
         })),
       ])
+
+      // Get unique products, filtered by selected brands if any
+      let dataForProducts = rawData
+      if (filters.brand && filters.brand.length > 0) {
+        dataForProducts = rawData.filter((item) => filters.brand.includes(item.brand))
+      }
+      const productMap = new Map<string, string>()
+      dataForProducts.forEach((item) => {
+        if (!productMap.has(item.productId)) {
+          productMap.set(item.productId, item.productDescription)
+        }
+      })
+      const uniqueProducts = Array.from(productMap.entries())
+        .map(([value, label]) => ({ label, value }))
+        .sort((a, b) => a.label.localeCompare(b.label))
+      setProducts(uniqueProducts)
     }
-  }, [rawData])
+  }, [rawData, filters.brand])
+
+  // Derive actual filter options (exclude placeholder entries)
+  const actualBrandOptions = brands.filter((b) => b.value !== "all");
+  const actualPlatformOptions = platforms.filter((p) => p.value !== "all");
+  const actualCityOptions = cities.filter((c) => c.value !== "all");
 
   return (
     <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-x-4 md:space-y-0">
       <div className="flex flex-1 flex-wrap items-center gap-2">
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={brandOpen} onOpenChange={setBrandOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
               role="combobox"
-              aria-expanded={open}
+              aria-expanded={brandOpen}
               className="w-full justify-between md:w-[200px]"
               disabled={isLoading}
             >
-              {filters.brand && filters.brand !== "all"
-                ? brands.find((brand) => brand.value === filters.brand)?.label
-                : "Select Brand"}
+              {filters.brand && filters.brand.length > 0
+                ? `${filters.brand.length} Brands`
+                : "Select Brands"}
               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-full p-0 md:w-[200px]">
             <Command>
-              <CommandInput placeholder="Search brand..." />
+              <CommandInput placeholder="Search brands..." />
               <CommandList>
-                <CommandEmpty>No brand found.</CommandEmpty>
+                <CommandEmpty>No brands found.</CommandEmpty>
                 <CommandGroup>
-                  {brands.map((brand) => (
+                  <CommandItem
+                    key="__all_brands"
+                    value="Select All Brands"
+                    onSelect={() => {
+                      const allValues = actualBrandOptions.map((b) => b.value);
+                      const isAllSelected = filters.brand.length === actualBrandOptions.length;
+                      const newSelections = isAllSelected ? [] : allValues;
+                      setFilters({ brand: newSelections, product: [] });
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        filters.brand.length === actualBrandOptions.length
+                          ? "opacity-100"
+                          : "opacity-0"
+                      )}
+                    />
+                    Select All Brands
+                  </CommandItem>
+                  {actualBrandOptions.map((b) => (
                     <CommandItem
-                      key={brand.value}
-                      value={brand.value}
-                      onSelect={(currentValue) => {
-                        setFilters({ brand: currentValue === filters.brand ? "all" : currentValue })
-                        setOpen(false)
+                      key={b.value}
+                      value={b.label}
+                      onSelect={() => {
+                        const newSelections = filters.brand.includes(b.value)
+                          ? filters.brand.filter((v) => v !== b.value)
+                          : [...filters.brand, b.value];
+                        setFilters({ brand: newSelections, product: [] });
                       }}
                     >
                       <Check
-                        className={cn("mr-2 h-4 w-4", filters.brand === brand.value ? "opacity-100" : "opacity-0")}
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          filters.brand.includes(b.value) ? "opacity-100" : "opacity-0"
+                        )}
                       />
-                      {brand.label}
+                      {b.label}
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -107,35 +157,191 @@ export function FilterBar() {
           </PopoverContent>
         </Popover>
 
-        <Select
-          value={filters.platform}
-          onValueChange={(value) => setFilters({ platform: value })}
-          disabled={isLoading}
-        >
-          <SelectTrigger className="w-full md:w-[180px]">
-            <SelectValue placeholder="Select Platform" />
-          </SelectTrigger>
-          <SelectContent>
-            {platforms.filter(platform => platform.value !== "").map((platform) => (
-              <SelectItem key={platform.value} value={platform.value}>
-                {platform.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={productOpen} onOpenChange={setProductOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={productOpen}
+              className="w-full justify-between md:w-[200px]"
+              disabled={isLoading}
+            >
+              {filters.product && filters.product.length > 0
+                ? `${filters.product.length} Products`
+                : "Select Products"}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-full p-0 md:w-[200px]">
+            <Command>
+              <CommandInput placeholder="Search products..." />
+              <CommandList>
+                <CommandEmpty>No products found.</CommandEmpty>
+                <CommandGroup>
+                  {products.map((prod) => (
+                    <CommandItem
+                      key={prod.value}
+                      value={prod.label}
+                      onSelect={() => {
+                        const current = filters.product || []
+                        const newSelections = current.includes(prod.value)
+                          ? current.filter((v) => v !== prod.value)
+                          : [...current, prod.value]
+                        setFilters({ product: newSelections })
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          filters.product && filters.product.includes(prod.value)
+                            ? "opacity-100"
+                            : "opacity-0"
+                        )}
+                      />
+                      {prod.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
-        <Select value={filters.city} onValueChange={(value) => setFilters({ city: value })} disabled={isLoading}>
-          <SelectTrigger className="w-full md:w-[180px]">
-            <SelectValue placeholder="Select City" />
-          </SelectTrigger>
-          <SelectContent>
-            {cities.filter(city => city.value !== "").map((city) => (
-              <SelectItem key={city.value} value={city.value}>
-                {city.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Platform multi-select filter */}
+        <Popover open={platformOpen} onOpenChange={setPlatformOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={platformOpen}
+              className="w-full justify-between md:w-[180px]"
+              disabled={isLoading}
+            >
+              {filters.platform && filters.platform.length > 0
+                ? `${filters.platform.length} Platforms`
+                : "Select Platforms"}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-full p-0 md:w-[180px]">
+            <Command>
+              <CommandInput placeholder="Search platforms..." />
+              <CommandList>
+                <CommandEmpty>No platforms found.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    key="__all_platforms"
+                    value="Select All Platforms"
+                    onSelect={() => {
+                      const allValues = actualPlatformOptions.map((p) => p.value);
+                      const isAllSelected = filters.platform.length === actualPlatformOptions.length;
+                      const newSelections = isAllSelected ? [] : allValues;
+                      setFilters({ platform: newSelections });
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        filters.platform.length === actualPlatformOptions.length
+                          ? "opacity-100"
+                          : "opacity-0"
+                      )}
+                    />
+                    Select All Platforms
+                  </CommandItem>
+                  {actualPlatformOptions.map((p) => (
+                    <CommandItem
+                      key={p.value}
+                      value={p.label}
+                      onSelect={() => {
+                        const newSelections = filters.platform.includes(p.value)
+                          ? filters.platform.filter((v) => v !== p.value)
+                          : [...filters.platform, p.value];
+                        setFilters({ platform: newSelections });
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          filters.platform.includes(p.value) ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      {p.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+
+        {/* City multi-select filter */}
+        <Popover open={cityOpen} onOpenChange={setCityOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={cityOpen}
+              className="w-full justify-between md:w-[180px]"
+              disabled={isLoading}
+            >
+              {filters.city && filters.city.length > 0
+                ? `${filters.city.length} Cities`
+                : "Select Cities"}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-full p-0 md:w-[180px]">
+            <Command>
+              <CommandInput placeholder="Search cities..." />
+              <CommandList>
+                <CommandEmpty>No cities found.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    key="__all_cities"
+                    value="Select All Cities"
+                    onSelect={() => {
+                      const allValues = actualCityOptions.map((c) => c.value);
+                      const isAllSelected = filters.city.length === actualCityOptions.length;
+                      const newSelections = isAllSelected ? [] : allValues;
+                      setFilters({ city: newSelections });
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        filters.city.length === actualCityOptions.length
+                          ? "opacity-100"
+                          : "opacity-0"
+                      )}
+                    />
+                    Select All Cities
+                  </CommandItem>
+                  {actualCityOptions.map((c) => (
+                    <CommandItem
+                      key={c.value}
+                      value={c.label}
+                      onSelect={() => {
+                        const newSelections = filters.city.includes(c.value)
+                          ? filters.city.filter((v) => v !== c.value)
+                          : [...filters.city, c.value];
+                        setFilters({ city: newSelections });
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          filters.city.includes(c.value) ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      {c.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
         <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
           <PopoverTrigger asChild>

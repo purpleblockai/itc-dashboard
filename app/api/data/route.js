@@ -25,7 +25,7 @@ export async function GET(request) {
       );
     }
 
-    const { clientName, role } = session.user;
+    const { clientName, role, category } = session.user;
     
     // Connect to MongoDB
     const client = await clientPromise;
@@ -34,10 +34,10 @@ export async function GET(request) {
     // Create query filter based on user role
     let query = {};
     
-    // If user is not an admin, filter data by their assigned client
+    // If user is not an admin, filter data by their assigned client and category
     if (role !== 'admin' && clientName) {
-      query = { Client_Name: clientName };
-      console.log(`Filtering data for client: ${clientName}`);
+      query = { Client_Name: clientName, Category: category };
+      console.log(`Filtering data for client: ${clientName} and category: ${category}`);
     } else {
       console.log('Admin user - showing all data');
     }

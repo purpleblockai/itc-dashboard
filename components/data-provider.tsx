@@ -46,7 +46,6 @@ interface DataContextType {
     listedSKUs: number
     availableSKUs: number
     notAvailableSKUs?: number
-    skuTracks: number
     penetration: number
     availability: number
     coverage: number
@@ -167,18 +166,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       
-      // Filter by brand
-      if (filters.brand && filters.brand !== "all" && item.brand !== filters.brand) {
+      // Filter by brand (multi-select)
+      if (filters.brand && filters.brand.length > 0 && !filters.brand.includes(item.brand)) {
         return false
       }
 
-      // Filter by product
-      if (filters.product && filters.product !== "all" && item.productId !== filters.product) {
+      // Filter by product (multi-select)
+      if (filters.product && filters.product.length > 0 && !filters.product.includes(item.productId)) {
         return false
       }
 
-      // Filter by city
-      if (filters.city && filters.city !== "all" && (item.city || "").toLowerCase() !== (filters.city || "").toLowerCase()) {
+      // Filter by city (multi-select)
+      if (filters.city && filters.city.length > 0 && !filters.city.includes((item.city || "").toLowerCase())) {
         return false
       }
 
@@ -187,8 +186,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         return false
       }
 
-      // Filter by platform
-      if (filters.platform && filters.platform !== "all" && item.platform !== filters.platform) {
+      // Filter by platform (multi-select)
+      if (filters.platform && filters.platform.length > 0 && !filters.platform.includes(item.platform)) {
         return false
       }
 
@@ -313,8 +312,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const cityRegionalData = React.useMemo(() => getCityRegionalData(filteredData), [filteredData])
   const platformData = React.useMemo(() => getPlatformData(filteredData), [filteredData])
   const platformShareData = React.useMemo(
-    () => getPlatformShareData(filteredData, filters.brand !== "all" ? filters.brand : undefined),
-    [filteredData, filters.brand],
+    () => getPlatformShareData(filteredData),
+    [filteredData],
   )
   const brandData = React.useMemo(() => getBrandData(filteredData), [filteredData])
   const productData = React.useMemo(() => getProductData(filteredData), [filteredData])

@@ -5,11 +5,11 @@ import type React from "react"
 import { createContext, useContext, useState } from "react"
 
 export type FilterState = {
-  brand: string
-  product: string
-  city: string
+  brand: string[]
+  product: string[]
+  city: string[]
   pincode: string
-  platform: string
+  platform: string[]
   dateRange: {
     from: Date | undefined
     to: Date | undefined
@@ -23,11 +23,11 @@ export type FilterContextType = {
 }
 
 const initialFilters: FilterState = {
-  brand: "all",
-  product: "all",
-  city: "all",
+  brand: [],
+  product: [],
+  city: [],
   pincode: "",
-  platform: "all",
+  platform: [],
   dateRange: {
     from: undefined,
     to: undefined,

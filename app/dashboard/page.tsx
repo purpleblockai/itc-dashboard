@@ -42,10 +42,8 @@ export default function DashboardPage() {
   const today = new Date()
   const formattedDate = format(today, "EEEE, MMMM d, yyyy")
   
-  // Welcome message based on user role
-  const welcomeMessage = user?.role === "admin" ? 
-    "Welcome Back Raghav" : 
-    `Welcome Back ${user?.clientName || ""}`;
+  // Welcome message using user's name
+  const welcomeMessage = `Welcome, ${user?.name?.split(' ')[0] || ""}`;
 
   // Find top performing brand
   const topBrand = !isLoading && brandData.length > 0
@@ -155,8 +153,8 @@ export default function DashboardPage() {
         ) : (
           <>
             <KpiCard 
-              title="SKU Tracks" 
-              value={kpis.skuTracks}
+              title="SKUs Tracked" 
+              value={kpis.skusTracked}
               icon={Icons.layers} 
               tooltip="Total unique SKUs tracked in the system"
             />

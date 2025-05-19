@@ -17,10 +17,10 @@ export async function POST(request) {
     }
 
     // Parse request body
-    const { userId, password, clientName, role = 'user' } = await request.json();
+    const { name, userId, password, clientName, role = 'user' } = await request.json();
 
     // Validate inputs
-    if (!userId || !password || !clientName) {
+    if (!name || !userId || !password || !clientName) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -45,6 +45,7 @@ export async function POST(request) {
 
     // Create new user
     await db.collection('users').insertOne({
+      name,
       userId,
       password: hashedPassword,
       clientName,

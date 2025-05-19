@@ -37,10 +37,11 @@ export const authOptions = {
 
           return {
             id: user._id.toString(),
-            name: user.userId,
+            name: user.name || user.fullName || user.username || user.userId,
             email: user.userId,
             clientName: user.clientName,
-            role: user.role || 'user'
+            role: user.role || 'user',
+            category: user.category
           };
         } catch (error) {
           console.error('Authentication error:', error);
@@ -54,6 +55,9 @@ export const authOptions = {
       if (user) {
         token.role = user.role;
         token.clientName = user.clientName;
+        token.name = user.name;
+        token.email = user.email;
+        token.category = user.category;
       }
       return token;
     },
@@ -61,6 +65,9 @@ export const authOptions = {
       if (token) {
         session.user.role = token.role;
         session.user.clientName = token.clientName;
+        session.user.name = token.name;
+        session.user.email = token.email;
+        session.user.category = token.category;
       }
       return session;
     }
