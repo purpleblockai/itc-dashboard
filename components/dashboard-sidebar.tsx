@@ -221,6 +221,30 @@ export function DashboardSidebar() {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            <SidebarMenuItem>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <SidebarMenuButton>
+                    <Icons.logout className="h-5 w-5" />
+                    {!(state === "collapsed") && <span className="ml-2">Log out</span>}
+                  </SidebarMenuButton>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sign out</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to sign out?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>No</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => signOut()}>
+                      Yes
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
         <SidebarSeparator />
@@ -231,37 +255,6 @@ export function DashboardSidebar() {
               <ThemeSwitch />
             </div>
           )}
-          {/* Logout confirmation dialog */}
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                className={`${
-                  state === "collapsed" ? "justify-center" : "justify-start"
-                } w-full text-foreground`}
-              >
-                <Icons.logout
-                  className={state === "collapsed" ? "" : "mr-2"}
-                  size={16}
-                />
-                {!(state === "collapsed") && <span>Log out</span>}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Sign out</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to sign out?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>No</AlertDialogCancel>
-                <AlertDialogAction onClick={() => signOut()}>
-                  Yes
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </SidebarFooter>
         <Button
           variant="outline"

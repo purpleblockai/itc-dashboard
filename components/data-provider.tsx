@@ -363,6 +363,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     fetchData()
   }, [])
 
+  useEffect(() => {
+    if (!isLoading && rawData.length > 0) {
+      const pincodeMap: Record<string, { listed: boolean; available: boolean }> = {};
+      rawData.forEach(item => {
+        if (!pincodeMap[item.pincode]) {
+          pincodeMap[item.pincode] = { listed: false, available: false };
+        }
+        if (item.isListed) pincodeMap[item.pincode].listed = true;
+        if (item.stockAvailable) pincodeMap[item.pincode].available = true;
+      });
+      const unserviceablePincodes = Object.keys(pincodeMap).filter(pincode => !pincodeMap[pincode].listed);
+      console.log(`[DATA] Unserviceable pincodes: ${unserviceablePincodes.length}`, unserviceablePincodes);
+    }
+  }, [isLoading, rawData])
+
   const refreshData = () => {
     fetchData()
   }

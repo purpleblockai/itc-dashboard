@@ -110,6 +110,8 @@ export async function GET(request) {
     console.log(`[DATA] Unique pincodes: ${Object.keys(pincodeMap).length}`);
     console.log(`[DATA] Listed pincodes: ${listedPincodes}`);
     console.log(`[DATA] Available pincodes: ${availablePincodes}`);
+    const unserviceablePincodes = Object.keys(pincodeMap).filter(pincode => !pincodeMap[pincode].listed);
+    console.log(`[DATA] Unserviceable pincodes: ${unserviceablePincodes.length}`, unserviceablePincodes);
     
     // Return the transformed data
     return NextResponse.json(transformedData);
