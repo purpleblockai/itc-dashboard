@@ -4,7 +4,6 @@ import { FilterBar } from "@/components/filters/filter-bar"
 import { KpiCard } from "@/components/kpi-card"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { BarChart, LineChart, PieChart } from "@/components/ui/chart"
 import { Icons } from "@/components/icons"
 import Link from "next/link"
@@ -19,6 +18,8 @@ import { useSession } from "next-auth/react"
 import { useFilters } from "@/components/filters/filter-provider"
 import { getCoverageByBrandData } from "@/lib/data-service"
 import { badgeVariants } from "@/components/ui/badge"
+import { useEffect, useState, useMemo } from "react"
+import { useToast } from "@/components/ui/use-toast"
 
 // Define type for the user with additional properties
 interface ExtendedUser {
@@ -58,6 +59,57 @@ export default function DashboardPage() {
   // Get competitor coverage data based on brands instead of platforms
   const coverageByBrandData = !isLoading ? getCoverageByBrandData(filteredData) : []
 
+  // Platform insights: compute coverage & availability comparisons per platform
+  const platformMetrics = useMemo(() => {
+    if (isLoading) return [];
+    const clientNameFromData = filteredData.find(item => item.clientName)?.clientName || "";
+    if (!clientNameFromData) return [];
+    const map = new Map<string, { clientItems: any[]; competitorItems: any[] }>();
+    filteredData.forEach(item => {
+      const platform = item.platform;
+      if (!map.has(platform)) {
+        map.set(platform, { clientItems: [], competitorItems: [] });
+      }
+      const entry = map.get(platform)!;
+      if (item.brand === clientNameFromData) {
+        entry.clientItems.push(item);
+      } else if (item.brand) {
+        entry.competitorItems.push(item);
+      }
+    });
+    return Array.from(map.entries()).map(([name, { clientItems, competitorItems }]) => {
+      // Compute client metrics
+      const clientTotal = clientItems.length;
+      const clientAvailable = clientItems.filter(i => i.availability === "Yes").length;
+      const clientCoverage = clientTotal > 0 ? (clientAvailable / clientTotal) * 100 : 0;
+      const clientListed = clientItems.filter(i => i.availability === "Yes" || i.availability === "No").length;
+      const clientAvailability = clientListed > 0 ? (clientAvailable / clientListed) * 100 : 0;
+      // Compute competitor metrics
+      const compTotal = competitorItems.length;
+      const compAvailable = competitorItems.filter(i => i.availability === "Yes").length;
+      const competitorCoverage = compTotal > 0 ? (compAvailable / compTotal) * 100 : 0;
+      const compListed = competitorItems.filter(i => i.availability === "Yes" || i.availability === "No").length;
+      const competitorAvailability = compListed > 0 ? (compAvailable / compListed) * 100 : 0;
+      return {
+        name,
+        clientCoverage: parseFloat(clientCoverage.toFixed(1)),
+        competitorCoverage: parseFloat(competitorCoverage.toFixed(1)),
+        coverageDelta: parseFloat((clientCoverage - competitorCoverage).toFixed(1)),
+        clientAvailability: parseFloat(clientAvailability.toFixed(1)),
+        competitorAvailability: parseFloat(competitorAvailability.toFixed(1)),
+        availabilityDelta: parseFloat((clientAvailability - competitorAvailability).toFixed(1)),
+      };
+    });
+  }, [filteredData, isLoading]);
+
+  // Determine lowest coverage and availability platforms
+  const lowestCoveragePlatform = platformMetrics.length > 0
+    ? platformMetrics.reduce((prev, curr) => curr.clientCoverage < prev.clientCoverage ? curr : prev)
+    : null;
+  const lowestAvailabilityPlatform = platformMetrics.length > 0
+    ? platformMetrics.reduce((prev, curr) => curr.clientAvailability < prev.clientAvailability ? curr : prev)
+    : null;
+
   // Last updated time
   const lastUpdated = format(new Date(), "h:mm a")
   
@@ -65,16 +117,21 @@ export default function DashboardPage() {
   const getReportDates = () => {
     if (isLoading || !rawData.length) return null;
     
-    // Get unique report dates
+    // Get unique report dates in DD-MM-YYYY format
     const reportDates = Array.from(
       new Set(rawData.map(item => {
         if (item.reportDate instanceof Date) {
-          return format(item.reportDate, "MMM d, yyyy");
+          return format(item.reportDate, "dd-MM-yyyy");
         } else {
-          return format(new Date(), "MMM d, yyyy");
+          return format(new Date(), "dd-MM-yyyy");
         }
       }))
-    ).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    ).sort((a, b) => {
+      // Sort by actual date values parsed from DD-MM-YYYY
+      const [dA, mA, yA] = a.split('-').map(Number);
+      const [dB, mB, yB] = b.split('-').map(Number);
+      return new Date(yA, mA - 1, dA).getTime() - new Date(yB, mB - 1, dB).getTime();
+    });
     
     if (reportDates.length < 2) {
       return {
@@ -93,14 +150,28 @@ export default function DashboardPage() {
   
   const reportDateInfo = getReportDates();
 
+  // Show data comparison info via toast on page mount
+  const { toast } = useToast();
+  const [infoToastShown, setInfoToastShown] = useState(false);
+  useEffect(() => {
+    if (!infoToastShown && reportDateInfo && reportDateInfo.hasBothDates) {
+      toast({
+        title: "Data Comparison Information",
+        description: `All delta percentages compare the latest report (${reportDateInfo.currentReportDate}) with the previous report (${reportDateInfo.previousReportDate}).`,
+        variant: "default",
+      });
+      setInfoToastShown(true);
+    }
+  }, [infoToastShown, reportDateInfo, toast]);
+
   if (error) {
     return <ErrorMessage message={error.message} retry={refreshData} />
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Welcome section */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-border pb-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">{welcomeMessage}</h2>
           <p className="text-muted-foreground">{formattedDate}</p>
@@ -116,17 +187,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Report date info */}
-      {reportDateInfo && reportDateInfo.hasBothDates && (
-        <Alert className="bg-blue-950/20 border-blue-900/30">
-          <Icons.info className="h-4 w-4 text-blue-400" />
-          <AlertTitle>Data Comparison Information</AlertTitle>
-          <AlertDescription>
-            All delta percentages compare the latest report ({reportDateInfo.currentReportDate}) with the previous report ({reportDateInfo.previousReportDate}).
-          </AlertDescription>
-        </Alert>
-      )}
-
       {/* Show message if no data */}
       {!isLoading && rawData.length === 0 && (
         <Card>
@@ -137,7 +197,224 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      <Separator />
+      {/* Key Insights Section */}
+      {!isLoading && (
+        <Card className="card-hover">
+          <CardHeader className="border-b bg-muted/40">
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Icons.lightbulb className="h-5 w-5 text-yellow-500" />
+              Key Insights
+            </CardTitle>
+            <CardDescription>Critical insights from your brand data</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+              <div className="rounded-md border overflow-hidden bg-black/5 dark:bg-black/20">
+                <div className="bg-red-900/10 dark:bg-red-900/20 p-4 border-b flex items-center gap-2">
+                  <Icons.alert className="h-5 w-5 text-red-500" />
+                  <h3 className="font-medium text-lg">Low Coverage Region</h3>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-2xl font-bold capitalize">{kpis.lowestCoverageRegion.name || "-"}</p>
+                    <Badge 
+                      variant="outline" 
+                      className={`${
+                        kpis.lowestCoverageRegion.delta > 0 
+                          ? "bg-green-900/20 text-green-400 border-green-800/50" 
+                          : "bg-red-900/20 text-red-400 border-red-800/50"
+                      }`}
+                    >
+                      {kpis.lowestCoverageRegion.delta > 0 ? "+" : ""}
+                      {kpis.lowestCoverageRegion.delta.toFixed(1)}%
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Your Coverage</span>
+                      <span className="font-semibold">{kpis.lowestCoverageRegion.value.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-800/50 rounded-full h-2.5">
+                      <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${kpis.lowestCoverageRegion.value}%` }}></div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Competitor Coverage</span>
+                      <span className="font-semibold">{(kpis.lowestCoverageRegion as any).competitorCoverage?.toFixed(1) || '0.0'}%</span>
+                    </div>
+                    <div className="w-full bg-slate-800/50 rounded-full h-2.5">
+                      <div className="bg-purple-500 h-2.5 rounded-full" style={{ width: `${(kpis.lowestCoverageRegion as any).competitorCoverage > 0 ? Math.max((kpis.lowestCoverageRegion as any).competitorCoverage, 1) : 0}%` }}></div>
+                    </div>
+                  </div>
+                  
+                  <p className="text-sm text-muted-foreground mt-3">
+                    This region has the lowest product coverage, representing an opportunity to improve distribution.
+                    {kpis.lowestCoverageRegion.delta !== 0 && (
+                      <span> Here, coverage is {kpis.lowestCoverageRegion.delta > 0 ? 'higher' : 'lower'} by {Math.abs(kpis.lowestCoverageRegion.delta).toFixed(1)}% compared to competitors.</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-md border overflow-hidden bg-black/5 dark:bg-black/20">
+                <div className="bg-red-900/10 dark:bg-red-900/20 p-4 border-b flex items-center gap-2">
+                  <Icons.alert className="h-5 w-5 text-red-500" />
+                  <h3 className="font-medium text-lg">Largest Availability Gap vs. Competitors</h3>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-2xl font-bold capitalize">
+                      {(kpis as any).highestAvailabilityDeltaFromCompetitors?.name || 
+                       kpis.highestAvailabilityDeltaRegion.name || "-"}
+                    </p>
+                    <Badge 
+                      variant="outline" 
+                      className="bg-red-900/20 text-red-400 border-red-800/50"
+                    >
+                      {((kpis as any).highestAvailabilityDeltaFromCompetitors?.delta || 
+                        kpis.highestAvailabilityDeltaRegion.delta || 0) > 0 ? "+" : ""}
+                      {((kpis as any).highestAvailabilityDeltaFromCompetitors?.delta?.toFixed(1) || 
+                         kpis.highestAvailabilityDeltaRegion.delta.toFixed(1) || '0.0')}%
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Your Availability</span>
+                      <span className="font-semibold">
+                        {(kpis as any).highestAvailabilityDeltaFromCompetitors?.value?.toFixed(1) || 
+                         kpis.highestAvailabilityDeltaRegion.value.toFixed(1) || '0.0'}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-800/50 rounded-full h-2.5">
+                      <div className="bg-blue-600 h-2.5 rounded-full" 
+                        style={{ width: `${Math.max((kpis as any).highestAvailabilityDeltaFromCompetitors?.value || 
+                                           kpis.highestAvailabilityDeltaRegion.value || 0, 1)}%` }}></div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Competitor Availability</span>
+                      <span className="font-semibold">
+                        {(kpis as any).highestAvailabilityDeltaFromCompetitors?.competitors?.toFixed(1) || '0.0'}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-800/50 rounded-full h-2.5">
+                      <div className="bg-purple-500 h-2.5 rounded-full" style={{ width: `${Math.max((kpis as any).highestAvailabilityDeltaFromCompetitors?.competitors || 0, 1)}%` }}></div>
+                    </div>
+                  </div>
+                  
+                  <p className="text-sm text-muted-foreground mt-3">
+                    This region has the largest availability gap compared to competitor brands.
+                    This represents an opportunity to improve your distribution in a competitive marketplace.
+                  </p>
+                </div>
+              </div>
+
+              {lowestCoveragePlatform && (
+                <div className="rounded-md border overflow-hidden bg-black/5 dark:bg-black/20">
+                  <div className="bg-red-900/10 dark:bg-red-900/20 p-4 border-b flex items-center gap-2">
+                    <Icons.alert className="h-5 w-5 text-red-500" />
+                    <h3 className="font-medium text-lg">Low Coverage Platform</h3>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-2xl font-bold capitalize">{lowestCoveragePlatform.name}</p>
+                      <Badge
+                        variant="outline"
+                        className={`${
+                          lowestCoveragePlatform.coverageDelta > 0
+                            ? "bg-green-900/20 text-green-400 border-green-800/50"
+                            : "bg-red-900/20 text-red-400 border-red-800/50"
+                        }`}
+                      >
+                        {lowestCoveragePlatform.coverageDelta > 0 ? "+" : ""}
+                        {lowestCoveragePlatform.coverageDelta.toFixed(1)}%
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Your Coverage</span>
+                        <span className="font-semibold">{lowestCoveragePlatform.clientCoverage.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-slate-800/50 rounded-full h-2.5">
+                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${lowestCoveragePlatform.clientCoverage}%` }}></div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Competitor Coverage</span>
+                        <span className="font-semibold">{lowestCoveragePlatform.competitorCoverage.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-slate-800/50 rounded-full h-2.5">
+                        <div className="bg-purple-500 h-2.5 rounded-full" style={{ width: `${lowestCoveragePlatform.competitorCoverage}%` }}></div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-3">
+                      This platform has the lowest product coverage, highlighting an area for potential growth.
+                      {lowestCoveragePlatform.coverageDelta !== 0 && (
+                        <span> Here, coverage is {lowestCoveragePlatform.coverageDelta > 0 ? 'higher' : 'lower'} by {Math.abs(lowestCoveragePlatform.coverageDelta).toFixed(1)}% compared to competitors.</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {lowestAvailabilityPlatform && (
+                <div className="rounded-md border overflow-hidden bg-black/5 dark:bg-black/20">
+                  <div className="bg-red-900/10 dark:bg-red-900/20 p-4 border-b flex items-center gap-2">
+                    <Icons.alert className="h-5 w-5 text-red-500" />
+                    <h3 className="font-medium text-lg">Low Availability Platform</h3>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-2xl font-bold capitalize">{lowestAvailabilityPlatform.name}</p>
+                      <Badge
+                        variant="outline"
+                        className={`${
+                          lowestAvailabilityPlatform.availabilityDelta > 0
+                            ? "bg-green-900/20 text-green-400 border-green-800/50"
+                            : "bg-red-900/20 text-red-400 border-red-800/50"
+                        }`}
+                      >
+                        {lowestAvailabilityPlatform.availabilityDelta > 0 ? "+" : ""}
+                        {lowestAvailabilityPlatform.availabilityDelta.toFixed(1)}%
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Your Availability</span>
+                        <span className="font-semibold">{lowestAvailabilityPlatform.clientAvailability.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-slate-800/50 rounded-full h-2.5">
+                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${lowestAvailabilityPlatform.clientAvailability}%` }}></div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Competitor Availability</span>
+                        <span className="font-semibold">{lowestAvailabilityPlatform.competitorAvailability.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-slate-800/50 rounded-full h-2.5">
+                        <div className="bg-purple-500 h-2.5 rounded-full" style={{ width: `${lowestAvailabilityPlatform.competitorAvailability}%` }}></div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-3">
+                      This platform has the lowest product availability, indicating potential distribution challenges.
+                      {lowestAvailabilityPlatform.availabilityDelta !== 0 && (
+                        <span> Here, availability is {lowestAvailabilityPlatform.availabilityDelta > 0 ? 'higher' : 'lower'} by {Math.abs(lowestAvailabilityPlatform.availabilityDelta).toFixed(1)}% compared to competitors.</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <FilterBar />
 
@@ -196,7 +473,7 @@ export default function DashboardPage() {
                   data={coverageByBrandData}
                   categories={["coverage"]}
                   index="name"
-                  colors={["#ff6d00"]}
+                  colors={["#8b5cf6"]}
                   valueFormatter={(value: number) => `${value}%`}
                   showLegend={false}
                   showGridLines={true}
@@ -213,12 +490,12 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="card-hover md:col-span-1 overflow-hidden p-0 bg-black/30">
-          <div className="px-6 pt-6 pb-2">
-            <h3 className="text-xl font-semibold">Pincode Metrics</h3>
-            <p className="text-sm text-muted-foreground">Pincode coverage statistics</p>
-          </div>
-          <div className="grid grid-cols-2 h-full">
+        <Card className="card-hover md:col-span-1 overflow-hidden p-0">
+          <CardHeader>
+            <CardTitle>Pincode Metrics</CardTitle>
+            <CardDescription>Pincode coverage statistics</CardDescription>
+          </CardHeader>
+          <CardContent>
             {isLoading ? (
               <>
                 <Skeleton className="h-32" />
@@ -227,153 +504,28 @@ export default function DashboardPage() {
                 <Skeleton className="h-32" />
               </>
             ) : (
-              <>
-                <div className="p-6 border-r border-b border-gray-800/30">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-md border p-4">
                   <p className="text-sm font-medium text-muted-foreground">Total Pincodes</p>
                   <p className="text-4xl font-bold text-blue-500 mt-1">{kpis.totalSKUs}</p>
                 </div>
-                <div className="p-6 border-b border-gray-800/30">
+                <div className="rounded-md border p-4">
                   <p className="text-sm font-medium text-muted-foreground">Serviceable Pincodes</p>
                   <p className="text-4xl font-bold text-green-500 mt-1">{kpis.serviceableSKUs}</p>
                 </div>
-                <div className="p-6 border-r border-gray-800/30">
+                <div className="rounded-md border p-4">
                   <p className="text-sm font-medium text-muted-foreground">Penetration %</p>
                   <p className="text-4xl font-bold text-yellow-500 mt-1">{kpis.penetration.toFixed(1)}%</p>
                 </div>
-                <div className="p-6">
+                <div className="rounded-md border p-4">
                   <p className="text-sm font-medium text-muted-foreground">Availability %</p>
                   <p className="text-4xl font-bold text-red-500 mt-1">{kpis.availability.toFixed(1)}%</p>
                 </div>
-              </>
+              </div>
             )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Key Insights Section */}
-      {!isLoading && (
-        <Card className="card-hover">
-          <CardHeader className="border-b bg-muted/40">
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Icons.lightbulb className="h-5 w-5 text-yellow-500" />
-              Key Insights
-            </CardTitle>
-            <CardDescription>Critical insights from your data comparing latest report with previous report</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="rounded-md border overflow-hidden bg-black/5 dark:bg-black/20">
-                <div className="bg-red-900/10 dark:bg-red-900/20 p-4 border-b flex items-center gap-2">
-                  <Icons.alert className="h-5 w-5 text-red-500" />
-                  <h3 className="font-medium text-lg">Low Coverage Region</h3>
-                </div>
-                <div className="p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-2xl font-bold capitalize">{kpis.lowestCoverageRegion.name || "-"}</p>
-                    <Badge 
-                      variant="outline" 
-                      className={`${
-                        kpis.lowestCoverageRegion.delta > 0 
-                          ? "bg-green-900/20 text-green-400 border-green-800/50" 
-                          : "bg-red-900/20 text-red-400 border-red-800/50"
-                      }`}
-                    >
-                      {kpis.lowestCoverageRegion.delta > 0 ? "+" : ""}
-                      {kpis.lowestCoverageRegion.delta.toFixed(1)}%
-                    </Badge>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Your Coverage</span>
-                      <span className="font-semibold">{kpis.lowestCoverageRegion.value.toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full bg-slate-800/50 rounded-full h-2.5">
-                      <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${kpis.lowestCoverageRegion.value}%` }}></div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Competitor Coverage</span>
-                      <span className="font-semibold">{(kpis.lowestCoverageRegion as any).competitorCoverage?.toFixed(1) || '0.0'}%</span>
-                    </div>
-                    <div className="w-full bg-slate-800/50 rounded-full h-2.5">
-                      <div className="bg-orange-500 h-2.5 rounded-full" 
-                        style={{ width: `${(kpis.lowestCoverageRegion as any).competitorCoverage > 0 ? 
-                          Math.max((kpis.lowestCoverageRegion as any).competitorCoverage, 1) : 0}%` }}></div>
-                    </div>
-                  </div>
-                  
-                  <p className="text-sm text-muted-foreground mt-3">
-                    This region has the lowest product coverage, representing an opportunity to improve distribution.
-                    {kpis.lowestCoverageRegion.delta !== 0 && (
-                      <span> Coverage has {kpis.lowestCoverageRegion.delta > 0 ? 'increased' : 'decreased'} by {Math.abs(kpis.lowestCoverageRegion.delta).toFixed(1)}% since last report.</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-md border overflow-hidden bg-black/5 dark:bg-black/20">
-                <div className="bg-red-900/10 dark:bg-red-900/20 p-4 border-b flex items-center gap-2">
-                  <Icons.alert className="h-5 w-5 text-red-500" />
-                  <h3 className="font-medium text-lg">Largest Availability Gap vs. Competitors</h3>
-                </div>
-                <div className="p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-2xl font-bold capitalize">
-                      {(kpis as any).highestAvailabilityDeltaFromCompetitors?.name || 
-                       kpis.highestAvailabilityDeltaRegion.name || "-"}
-                    </p>
-                    <Badge 
-                      variant="outline" 
-                      className="bg-red-900/20 text-red-400 border-red-800/50"
-                    >
-                      {((kpis as any).highestAvailabilityDeltaFromCompetitors?.delta || 
-                        kpis.highestAvailabilityDeltaRegion.delta || 0) > 0 ? "+" : ""}
-                      {((kpis as any).highestAvailabilityDeltaFromCompetitors?.delta?.toFixed(1) || 
-                         kpis.highestAvailabilityDeltaRegion.delta.toFixed(1) || '0.0')}%
-                    </Badge>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Your Availability</span>
-                      <span className="font-semibold">
-                        {(kpis as any).highestAvailabilityDeltaFromCompetitors?.value?.toFixed(1) || 
-                         kpis.highestAvailabilityDeltaRegion.value.toFixed(1) || '0.0'}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-800/50 rounded-full h-2.5">
-                      <div className="bg-blue-600 h-2.5 rounded-full" 
-                        style={{ width: `${Math.max((kpis as any).highestAvailabilityDeltaFromCompetitors?.value || 
-                                           kpis.highestAvailabilityDeltaRegion.value || 0, 1)}%` }}></div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Competitor Availability</span>
-                      <span className="font-semibold">
-                        {(kpis as any).highestAvailabilityDeltaFromCompetitors?.competitors?.toFixed(1) || '0.0'}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-800/50 rounded-full h-2.5">
-                      <div className="bg-orange-500 h-2.5 rounded-full" 
-                        style={{ width: `${Math.max((kpis as any).highestAvailabilityDeltaFromCompetitors?.competitors || 0, 1)}%` }}></div>
-                    </div>
-                  </div>
-                  
-                  <p className="text-sm text-muted-foreground mt-3">
-                    This region has the largest availability gap where competitors have higher product availability than your brand.
-                    This represents an opportunity to improve your distribution in a competitive marketplace.
-                  </p>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
-      )}
+      </div>
 
       {/* Navigation cards */}
       <div className="grid gap-4 md:grid-cols-3">

@@ -137,15 +137,12 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <h3 className="text-lg font-medium">Pinsight Dashboard</h3>
               <p className="text-sm text-muted-foreground">
-                Developed by Purple Block Version 1.0.0
+                Powered by {" "}
+                <Link href="https://www.purpleblock.ai" target="_blank" rel="noopener noreferrer" className="underline">
+                  Purple Block
+                </Link>
               </p>
               <div className="flex gap-2 mt-4">
-                <Button variant="outline" asChild>
-                  <Link href="https://github.com/your-repo" target="_blank">
-                    <Icons.github className="mr-2 h-4 w-4" />
-                    GitHub
-                  </Link>
-                </Button>
                 <Button variant="outline" asChild>
                   <Link href="/dashboard">
                     <Icons.home className="mr-2 h-4 w-4" />

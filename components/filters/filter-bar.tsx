@@ -355,10 +355,10 @@ export function FilterBar() {
               {filters.dateRange.from ? (
                 filters.dateRange.to ? (
                   <>
-                    {format(filters.dateRange.from, "LLL dd, y")} - {format(filters.dateRange.to, "LLL dd, y")}
+                    {format(filters.dateRange.from, "dd-MM-yyyy")} - {format(filters.dateRange.to, "dd-MM-yyyy")}
                   </>
                 ) : (
-                  format(filters.dateRange.from, "LLL dd, y")
+                  format(filters.dateRange.from, "dd-MM-yyyy")
                 )
               ) : (
                 <span>Pick a date range</span>

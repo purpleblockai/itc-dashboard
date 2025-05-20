@@ -75,28 +75,10 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
     // Set the inner height based on grid content
     const innerHeight = gridHeight;
 
-    // Color scale - different color schemes based on metric
-    let colorScale;
-    
-    switch (heatmapType) {
-      case "coverage":
-        // Blue scale for coverage
-        colorScale = d3.scaleSequential()
-          .domain([0, 100])
-          .interpolator(d3.interpolateRgb("#3949ab", "#bbdefb"));
-        break;
-      case "penetration":
-        // Purple scale for penetration
-        colorScale = d3.scaleSequential()
-          .domain([0, 100])
-          .interpolator(d3.interpolateRgb("#6a1b9a", "#e1bee7"));
-        break;
-      default:
-        // Red to green for availability (default)
-        colorScale = d3.scaleSequential()
-          .domain([0, 100])
-          .interpolator(d3.interpolateRgb("#e53935", "#4caf50"));
-    }
+    // Color scale - red to green for all metrics
+    const colorScale = d3.scaleSequential()
+      .domain([0, 100])
+      .interpolator(d3.interpolateRgb("#e53935", "#4caf50"));
 
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`)
 
@@ -287,20 +269,9 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
       .attr("x2", "100%")
       .attr("y2", "0%")
 
-    // Set gradient colors based on the heatmap type
-    switch (heatmapType) {
-      case "coverage":
-        linearGradient.append("stop").attr("offset", "0%").attr("stop-color", "#3949ab")
-        linearGradient.append("stop").attr("offset", "100%").attr("stop-color", "#bbdefb")
-        break;
-      case "penetration":
-        linearGradient.append("stop").attr("offset", "0%").attr("stop-color", "#6a1b9a")
-        linearGradient.append("stop").attr("offset", "100%").attr("stop-color", "#e1bee7")
-        break;
-      default:
-        linearGradient.append("stop").attr("offset", "0%").attr("stop-color", colorScale(0))
-        linearGradient.append("stop").attr("offset", "100%").attr("stop-color", colorScale(100))
-    }
+    // Legend gradient stops - red to green scale
+    linearGradient.append("stop").attr("offset", "0%").attr("stop-color", "#e53935");
+    linearGradient.append("stop").attr("offset", "100%").attr("stop-color", "#4caf50");
 
     g.append("rect")
       .attr("x", legendX)

@@ -64,7 +64,7 @@ const config = {
           ring: "hsl(var(--sidebar-ring))",
         },
         pinsight: {
-          orange: "#ff6d00",
+          orange: "#8b5cf6",
           red: "#e53935",
           dark: "#111111",
         },

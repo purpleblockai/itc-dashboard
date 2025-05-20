@@ -109,13 +109,16 @@ export function processRow(row: CompetitionData): ProcessedData {
     return new Date(dateStr);
   };
 
+  // Handle both 'Report_Date' and 'Report Date' field names
+  const rawDate = (row as any).Report_Date ?? (row as any)['Report Date'] ?? '';
+  
   // Determine availability status
   const isListed = row.Availability === "Yes" || row.Availability === "No";
   const stockAvailable = row.Availability === "Yes";
 
   return {
     id: String(row.Unique_Product_ID),
-    reportDate: parseDate(row.Report_Date),
+    reportDate: parseDate(rawDate),
     runDate: row.Added_To_DB ? new Date(row.Added_To_DB) : new Date(),
     productId: String(row.Unique_Product_ID),
     brand: row.Brand,

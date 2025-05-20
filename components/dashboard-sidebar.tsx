@@ -19,6 +19,18 @@ import { Icons } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitch } from "./theme-switch";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { signOut } from "next-auth/react";
 
 // Define type for the user with additional properties
 interface ExtendedUser {
@@ -170,27 +182,6 @@ export function DashboardSidebar() {
               </SidebarMenuItem>
             )}
             
-            {isAdmin && (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive("/dashboard/set-client")}
-                >
-                  <Link
-                    href="/dashboard/set-client"
-                    className={`flex ${
-                      state === "collapsed" ? "justify-center" : "justify-start"
-                    } text-foreground hover:text-foreground`}
-                  >
-                    <Icons.user className="h-5 w-5" />
-                    {!(state === "collapsed") && (
-                      <span className="ml-2">Assign Client</span>
-                    )}
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-            
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
@@ -209,6 +200,30 @@ export function DashboardSidebar() {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            <SidebarMenuItem>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <SidebarMenuButton>
+                    <Icons.logout className="h-5 w-5" />
+                    {!(state === "collapsed") && <span className="ml-2">Log out</span>}
+                  </SidebarMenuButton>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sign out</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to sign out?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>No</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => signOut()}>
+                      Yes
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
         <SidebarSeparator />
@@ -219,21 +234,6 @@ export function DashboardSidebar() {
               <ThemeSwitch />
             </div>
           )}
-          <Button
-            variant="outline"
-            className={`${
-              state === "collapsed" ? "justify-center" : "justify-start"
-            } w-full text-foreground`}
-            asChild
-          >
-            <Link href="/api/auth/signout">
-              <Icons.logout
-                className={state === "collapsed" ? "" : "mr-2"}
-                size={16}
-              />
-              {!(state === "collapsed") && <span>Log out</span>}
-            </Link>
-          </Button>
         </SidebarFooter>
         <Button
           variant="outline"

@@ -18,6 +18,7 @@ import {
   getHeatmapDataByType,
 } from "@/lib/data-service"
 import { useFilters } from "./filters/filter-provider"
+import { parseISO } from 'date-fns'
 
 // Define extended user type to include role and clientName
 interface ExtendedUser {
@@ -166,18 +167,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       
-      // Filter by brand (multi-select)
-      if (filters.brand && filters.brand.length > 0 && !filters.brand.includes(item.brand)) {
+      // Filter by brand
+      if (filters.brand.length > 0 && !filters.brand.includes(item.brand)) {
         return false
       }
 
-      // Filter by product (multi-select)
-      if (filters.product && filters.product.length > 0 && !filters.product.includes(item.productId)) {
+      // Filter by product
+      if (filters.product.length > 0 && !filters.product.includes(item.productId)) {
         return false
       }
 
-      // Filter by city (multi-select)
-      if (filters.city && filters.city.length > 0 && !filters.city.includes((item.city || "").toLowerCase())) {
+      // Filter by city
+      if (
+        filters.city.length > 0 &&
+        !filters.city.map((c) => c.toLowerCase()).includes((item.city || "").toLowerCase())
+      ) {
         return false
       }
 
@@ -186,33 +190,33 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         return false
       }
 
-      // Filter by platform (multi-select)
-      if (filters.platform && filters.platform.length > 0 && !filters.platform.includes(item.platform)) {
+      // Filter by platform
+      if (filters.platform.length > 0 && !filters.platform.includes(item.platform)) {
         return false
       }
 
-      // Filter by date range
+      // Filter by selected date or date range
       if (filters.dateRange.from) {
-        // Handle case when we only have a start date
         const itemDate = new Date(item.reportDate);
         const fromDate = new Date(filters.dateRange.from);
-        
-        // Normalize dates to start of day for comparison
+        // Normalize fromDate to start of day
         fromDate.setHours(0, 0, 0, 0);
-        if (itemDate < fromDate) {
-          return false;
-        }
-      }
-
-      if (filters.dateRange.to) {
-        // Handle case when we have an end date
-        const itemDate = new Date(item.reportDate);
-        const toDate = new Date(filters.dateRange.to);
-        
-        // Normalize to end of day for comparison
-        toDate.setHours(23, 59, 59, 999);
-        if (itemDate > toDate) {
-          return false;
+        if (filters.dateRange.to) {
+          // Range selected: include up to end of toDate
+          const toDate = new Date(filters.dateRange.to);
+          toDate.setHours(23, 59, 59, 999);
+          if (itemDate < fromDate || itemDate > toDate) {
+            return false;
+          }
+        } else {
+          // Single date selected: match exact date only
+          if (
+            itemDate.getFullYear() !== fromDate.getFullYear() ||
+            itemDate.getMonth() !== fromDate.getMonth() ||
+            itemDate.getDate() !== fromDate.getDate()
+          ) {
+            return false;
+          }
         }
       }
 
@@ -267,25 +271,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     
     // Apply client filter but keep date and other filters for key insights
     const keyInsightsData = clientFilteredData.filter(item => {
-      // Apply the same date filters as in filteredData
+      // Filter by selected date or date range for insights
       if (filters.dateRange.from) {
         const itemDate = new Date(item.reportDate);
         const fromDate = new Date(filters.dateRange.from);
+        // Normalize fromDate to start of day
         fromDate.setHours(0, 0, 0, 0);
-        if (itemDate < fromDate) {
-          return false;
+        if (filters.dateRange.to) {
+          // Range selected: include up to end of toDate
+          const toDate = new Date(filters.dateRange.to);
+          toDate.setHours(23, 59, 59, 999);
+          if (itemDate < fromDate || itemDate > toDate) {
+            return false;
+          }
+        } else {
+          // Single date selected: match exact date only
+          if (
+            itemDate.getFullYear() !== fromDate.getFullYear() ||
+            itemDate.getMonth() !== fromDate.getMonth() ||
+            itemDate.getDate() !== fromDate.getDate()
+          ) {
+            return false;
+          }
         }
       }
-
-      if (filters.dateRange.to) {
-        const itemDate = new Date(item.reportDate);
-        const toDate = new Date(filters.dateRange.to);
-        toDate.setHours(23, 59, 59, 999);
-        if (itemDate > toDate) {
-          return false;
-        }
-      }
-      
       return true;
     });
     
@@ -312,8 +321,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const cityRegionalData = React.useMemo(() => getCityRegionalData(filteredData), [filteredData])
   const platformData = React.useMemo(() => getPlatformData(filteredData), [filteredData])
   const platformShareData = React.useMemo(
-    () => getPlatformShareData(filteredData),
-    [filteredData],
+    () => getPlatformShareData(
+      filteredData,
+      filters.brand.length === 1 ? filters.brand[0] : undefined
+    ),
+    [filteredData, filters.brand],
   )
   const brandData = React.useMemo(() => getBrandData(filteredData), [filteredData])
   const productData = React.useMemo(() => getProductData(filteredData), [filteredData])
@@ -335,7 +347,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const data = await fetchCompetitionData()        // already ProcessedData[]
       const parsed = data.map(r => ({
         ...r,
-        reportDate: new Date(r.reportDate)
+        // parse 'YYYY-MM-DD' string into local Date to avoid timezone shifts
+        reportDate: parseISO(r.reportDate as unknown as string)
       }))
       setRawData(parsed)
       setError(null)
@@ -349,6 +362,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchData()
   }, [])
+
+  useEffect(() => {
+    if (!isLoading && rawData.length > 0) {
+      const pincodeMap: Record<string, { listed: boolean; available: boolean }> = {};
+      rawData.forEach(item => {
+        if (!pincodeMap[item.pincode]) {
+          pincodeMap[item.pincode] = { listed: false, available: false };
+        }
+        if (item.isListed) pincodeMap[item.pincode].listed = true;
+        if (item.stockAvailable) pincodeMap[item.pincode].available = true;
+      });
+      const unserviceablePincodes = Object.keys(pincodeMap).filter(pincode => !pincodeMap[pincode].listed);
+      console.log(`[DATA] Unserviceable pincodes: ${unserviceablePincodes.length}`, unserviceablePincodes);
+    }
+  }, [isLoading, rawData])
 
   const refreshData = () => {
     fetchData()
