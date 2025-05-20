@@ -182,27 +182,6 @@ export function DashboardSidebar() {
               </SidebarMenuItem>
             )}
             
-            {isAdmin && (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive("/dashboard/set-client")}
-                >
-                  <Link
-                    href="/dashboard/set-client"
-                    className={`flex ${
-                      state === "collapsed" ? "justify-center" : "justify-start"
-                    } text-foreground hover:text-foreground`}
-                  >
-                    <Icons.user className="h-5 w-5" />
-                    {!(state === "collapsed") && (
-                      <span className="ml-2">Assign Client</span>
-                    )}
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-            
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
