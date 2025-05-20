@@ -1,5 +1,5 @@
 // This script will initialize the admin user in MongoDB
-// Usage: node scripts/init-admin.js
+// Usage : node scripts/init-admin.js
 
 require('dotenv').config({ path: '.env.local' });
 const { MongoClient } = require('mongodb');
