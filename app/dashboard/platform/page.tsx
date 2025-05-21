@@ -35,9 +35,12 @@ export default function PlatformInsightsPage() {
   const formatDateForComparison = (dateInput: Date | string | undefined): string => {
     if (!dateInput) return "";
     
-    // If it's a Date object, convert to string in YYYY-MM-DD format
+    // If it's a Date object, convert to string in YYYY-MM-DD format using local date
     if (dateInput instanceof Date) {
-      return dateInput.toISOString().split('T')[0];
+      const year = dateInput.getFullYear();
+      const month = String(dateInput.getMonth() + 1).padStart(2, '0');
+      const day = String(dateInput.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     }
     
     // If it's a string in DD-MM-YYYY format, convert to YYYY-MM-DD

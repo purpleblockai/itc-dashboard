@@ -56,7 +56,10 @@ export async function GET(request) {
       const dt = parseReportDate(rawDate);
   
       // 2. pull out only the YYYY-MM-DD
-      const dateOnly = dt.toISOString().split("T")[0];
+      const year = dt.getFullYear();
+      const month = String(dt.getMonth() + 1).padStart(2, '0');
+      const day = String(dt.getDate()).padStart(2, '0');
+      const dateOnly = `${year}-${month}-${day}`;
   
       // availability flags
       const availabilityStatus = item.Availability || "";
