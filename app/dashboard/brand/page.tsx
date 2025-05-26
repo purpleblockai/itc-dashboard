@@ -35,9 +35,12 @@ import {
   CartesianGrid,
   LabelList,
 } from "recharts";
+import { useTheme } from "next-themes";
 
 export default function BrandEvaluationPage() {
   const { isLoading, brandData: initialBrandData, productData, filteredData } = useData();
+  const { resolvedTheme, theme } = useTheme();
+  const isDarkMode = resolvedTheme === 'dark';
 
   console.log("Sample productData:", productData.slice(0, 10));
   console.log("isLoading:", isLoading);
@@ -440,6 +443,26 @@ export default function BrandEvaluationPage() {
     { name: "Discount", value: radarData[0].discount },
   ] : [];
 
+  // Stronger saturated colors for clearer visibility
+  const radarColors = ["#7C3AED", "#1D4ED8", "#047857", "#CA8A04", "#DB2777", "#4F46E5"];
+  const multiBrandRadarData = radarData.length > 1 ? ["Availability", "Penetration", "Coverage", "Discount"].map(metricName => {
+    const metricKey = metricName.toLowerCase();
+    const entry: any = { metric: metricName };
+    radarData.forEach(brand => {
+      entry[brand.name] = (brand as any)[metricKey];
+    });
+    return entry;
+  }) : [];
+  // Sort brands by total 'insight' descending (availability+penetration+coverage+discount)
+  const sortedRadarDataByInsight = [...radarData].sort((a, b) => {
+    const aSum = a.availability + a.penetration + a.coverage + a.discount;
+    const bSum = b.availability + b.penetration + b.coverage + b.discount;
+    return bSum - aSum;
+  });
+  // Compute discount axis max (max discount + 10)
+  const maxDiscountValue = radarData.reduce((max, b) => Math.max(max, b.discount), 0);
+  const discountAxisMax = maxDiscountValue + 10;
+
   // Format data for brand performance comparison
   const brandComparisonChartData = !isLoading ? brandData
     .filter(brand => brand.skuCount > 0)
@@ -452,6 +475,13 @@ export default function BrandEvaluationPage() {
       "Avg. Discount": brand.avgDiscount || 0,
       skuCount: brand.skuCount,
     })) : [];
+  const brandDiscountChartData = !isLoading ? brandData
+    .filter((brand) => brand.skuCount > 0)
+    .map((brand) => ({
+      name: brand.name,
+      Discount: brand.avgDiscount || 0,
+    }))
+    .sort((a, b) => b.Discount - a.Discount) : [];
 
   // Helper formatter functions with correct typing
   const percentFormatter = (value: any): string => {
@@ -588,7 +618,13 @@ export default function BrandEvaluationPage() {
                 yAxisLabel="Average Availability (%)"
                 sizeKey="size"
                 sizeScale={[20, 90]} // Slightly larger dots for better visibility
-                colors={["#8b5cf6", "#3B82F6", "#10B981", "#FBBF24", "#8B5CF6", "#EC4899"]} // Replaced orange with purple in palette
+                colors={radarColors} // Use same brand colors as radar
+                categoryColors={{
+                  "Amul": "#7C3AED",
+                  "Cavin's": "#1D4ED8",
+                  "Britannia": "#047857",
+                  "Smoodh": "#CA8A04"
+                }}
                 valueFormatter={{
                   x: (value: number) => `${value.toFixed(1)}%`,
                   y: (value: number) => `${value.toFixed(1)}%`
@@ -616,41 +652,26 @@ export default function BrandEvaluationPage() {
             {isLoading ? (
               <Skeleton className="h-full w-full" />
             ) : radarData && radarData.length > 1 ? (
+              // Multi-brand radar: one shape per brand over fixed metrics axes
               <ResponsiveContainer width="100%" height="100%">
-                <RechartsRadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                  <PolarGrid stroke="#e5e7eb" />
-                  <PolarAngleAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#6b7280' }} />
-                  {/* Calculate average values for each metric to determine render order */}
-                  {(() => {
-                    // Calculate average values for each metric
-                    const avgAvailability = radarData.reduce((sum, item) => sum + item.availability, 0) / radarData.length;
-                    const avgPenetration = radarData.reduce((sum, item) => sum + item.penetration, 0) / radarData.length;
-                    const avgCoverage = radarData.reduce((sum, item) => sum + item.coverage, 0) / radarData.length;
-                    
-                    // Create array of metrics with their values and colors
-                    const metrics = [
-                      { name: "Availability", key: "availability", value: avgAvailability, color: "#0047AB" }, // Cobalt Blue (darker)
-                      { name: "Penetration", key: "penetration", value: avgPenetration, color: "#8b5cf6" }, // Replaced orange with purple 
-                      { name: "Coverage", key: "coverage", value: avgCoverage, color: "#00865A" } // Darker green
-                    ];
-                    
-                    // Sort by value - highest first (rendered at bottom)
-                    const sortedMetrics = [...metrics].sort((a, b) => b.value - a.value);
-                    
-                    // Return radar components in the sorted order
-                    return sortedMetrics.map(metric => (
-                      <Radar 
-                        key={metric.key}
-                        name={metric.name} 
-                        dataKey={metric.key} 
-                        stroke={metric.color} 
-                        fill={metric.color} 
-                        fillOpacity={0.7}
-                      />
-                    ));
-                  })()}
-                  <Legend />
+                <RechartsRadarChart cx="50%" cy="50%" outerRadius="80%" data={multiBrandRadarData}>
+                  <PolarGrid stroke={isDarkMode ? '#4B5563' : '#D1D5DB'} />
+                  <PolarAngleAxis dataKey="metric" tick={{ fill: isDarkMode ? '#374151' : '#4B5563', fontSize: 12 }} />
+                  {/* Use domain based on max discount + 10% for better discount visibility */}
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: isDarkMode ? '#374151' : '#4B5563' }} />
+                  {sortedRadarDataByInsight.map((brand, idx) => (
+                    <Radar
+                      key={brand.name}
+                      name={brand.name}
+                      dataKey={brand.name}
+                      stroke={radarColors[idx % radarColors.length]}
+                      fill={radarColors[idx % radarColors.length]}
+                      fillOpacity={0.6}
+                      strokeWidth={2}
+                      dot={{ r: 3, stroke: radarColors[idx % radarColors.length], strokeWidth: 1, fill: '#fff' }}
+                    />
+                  ))}
+                  <Legend wrapperStyle={{ color: isDarkMode ? '#fff' : '#000' }} />
                   <RechartsTooltip formatter={(value: any) => {
                     if (value === null || value === undefined) return ["-", ""];
                     return [typeof value === 'number' ? `${value.toFixed(1)}%` : value, ""];
@@ -661,9 +682,9 @@ export default function BrandEvaluationPage() {
               // Single brand mode - display metrics radar
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsRadarChart cx="50%" cy="50%" outerRadius="80%" data={singleBrandRadarData}>
-                  <PolarGrid stroke="#e5e7eb" />
-                  <PolarAngleAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#6b7280' }} />
+                  <PolarGrid stroke={isDarkMode ? '#4B5563' : '#D1D5DB'} />
+                  <PolarAngleAxis dataKey="name" tick={{ fill: isDarkMode ? '#374151' : '#4B5563', fontSize: 12 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: isDarkMode ? '#374151' : '#4B5563' }} />
                   <Radar 
                     name={radarData[0]?.name || "Brand"} 
                     dataKey="value" 
@@ -672,7 +693,7 @@ export default function BrandEvaluationPage() {
                     fillOpacity={0.8}
                     strokeWidth={2} 
                   />
-                  <Legend />
+                  <Legend wrapperStyle={{ color: isDarkMode ? '#fff' : '#000' }} />
                   <RechartsTooltip formatter={(value: any) => {
                     if (value === null || value === undefined) return ["-", ""];
                     return [typeof value === 'number' ? `${value.toFixed(1)}%` : value, ""];
@@ -689,35 +710,31 @@ export default function BrandEvaluationPage() {
 
         {/* NEW: Horizontal Bar Chart - Brand Performance Comparison */}
         <Card className="card-hover overflow-hidden border-none shadow-lg">
-          <CardHeader className="bg-gradient-to-r from-blue-800 to-blue-700 text-white pb-6">
-            <CardTitle className="text-2xl font-bold">Brand Performance Comparison</CardTitle>
-            <CardDescription className="text-blue-100 opacity-90">
-              Side-by-side comparison of key metrics across top brands
+          <CardHeader className="bg-gradient-to-r from-yellow-800 to-yellow-700 text-white pb-6">
+            <CardTitle className="text-2xl font-bold">Average Discount per Brand</CardTitle>
+            <CardDescription className="text-yellow-100 opacity-90">
+              Average discount percentage per top brands
             </CardDescription>
           </CardHeader>
           <CardContent className="h-[450px] p-6">
             {isLoading ? (
               <Skeleton className="h-full w-full" />
-            ) : brandComparisonChartData && brandComparisonChartData.length > 0 ? (
+            ) : brandDiscountChartData && brandDiscountChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsBarChart
-                  data={brandComparisonChartData}
+                  data={brandDiscountChartData}
                   layout="vertical"
                   margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
+                  <XAxis type="number" domain={[0, 'dataMax + 5']} tickFormatter={(value) => `${value}%`} />
                   <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
                   <RechartsTooltip formatter={(value: any) => {
                     if (value === null || value === undefined) return ["-", ""];
                     return [typeof value === 'number' ? `${value.toFixed(1)}%` : value, ""];
                   }} />
-                  <Legend />
-                  <Bar dataKey="Availability" fill="#3B82F6" radius={[0, 4, 4, 0]}>
-                    <LabelList dataKey="Availability" position="right" formatter={(value: number) => `${value.toFixed(0)}%`} />
-                  </Bar>
-                  <Bar dataKey="Penetration" fill="#8b5cf6" radius={[0, 4, 4, 0]}>
-                    <LabelList dataKey="Penetration" position="right" formatter={(value: number) => `${value.toFixed(0)}%`} />
+                  <Bar dataKey="Discount" fill="#F59E0B" radius={[0, 4, 4, 0]}>
+                    <LabelList dataKey="Discount" position="right" formatter={(value: number) => `${value.toFixed(1)}%`} />
                   </Bar>
                 </RechartsBarChart>
               </ResponsiveContainer>

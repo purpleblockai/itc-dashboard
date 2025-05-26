@@ -418,7 +418,7 @@ export default function PlatformInsightsPage() {
                       <div className="w-full bg-gray-200 rounded-full h-4 dark:bg-gray-700">
                         <div 
                           className="bg-[#00c49f] h-4 rounded-full" 
-                          style={{ width: `${Math.min(100, platform.Discount * 3)}%` }}
+                          style={{ width: `${Math.min(100, platform.Discount)}%` }}
                         ></div>
                       </div>
                     </div>

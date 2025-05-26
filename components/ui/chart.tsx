@@ -33,16 +33,18 @@ interface ChartProps {
   className?: string
   xAxisLabel?: string
   yAxisLabel?: string
+  labelFormatter?: (label: any) => string
   sizeKey?: string
   sizeScale?: [number, number]
   category?: string
+  categoryColors?: Record<string, string>
 }
 
 export function LineChart({
   data,
   categories = [],
   index = "date",
-  colors = ["#8b5cf6"],
+  colors = ["#9333EA"],
   valueFormatter,
   showLegend = false,
   showGridLines = true,
@@ -126,13 +128,14 @@ export function BarChart({
   data,
   categories = [],
   index = "name",
-  colors = ["#8b5cf6"],
+  colors = ["#9333EA"],
   valueFormatter,
   showLegend = false,
   showGridLines = true,
   className,
   xAxisLabel,
   yAxisLabel,
+  labelFormatter,
 }: ChartProps) {
   if (!data || data.length === 0) {
     return (
@@ -164,11 +167,8 @@ export function BarChart({
           {yAxisLabel && <Label value={yAxisLabel} angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: '12px', fill: '#666' }} />}
         </YAxis>
         <Tooltip
-          formatter={(value: any, name: string) => {
-            if (name === "Availability") return [typeof valueFormatter === "function" ? valueFormatter(value) : value, "Availability"];
-            if (name === "Penetration") return [typeof valueFormatter === "function" ? valueFormatter(value) : value, "Penetration"];
-            return [typeof valueFormatter === "function" ? valueFormatter(value) : value, name];
-          }}
+          formatter={(value: any, name: string) => [typeof valueFormatter === "function" ? valueFormatter(value) : value, name]}
+          labelFormatter={labelFormatter}
           contentStyle={{ borderRadius: "6px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" }}
           labelStyle={{ fontWeight: "bold", marginBottom: "4px" }}
         />
@@ -192,7 +192,7 @@ export function PieChart({
   data,
   category = "value",
   index = "name",
-  colors = ["#8b5cf6", "#a78bfa", "#c4b5fd", "#e9d5ff"],
+  colors = ["#6B21A8", "#9333EA", "#A78BFA", "#E9D5FF"],
   valueFormatter,
   showLegend = true,
   className,
@@ -243,8 +243,9 @@ export function ScatterChart({
   sizeKey = "skuCount",
   sizeScale = [1, 100],
   showLegend = false,
-  colors = ["#8b5cf6", "#3B82F6", "#10B981", "#FBBF24", "#8B5CF6", "#EC4899"],
+  colors = ["#6B21A8", "#9333EA", "#A78BFA", "#C4B5FD", "#E9D5FF"],
   valueFormatter,
+  categoryColors,
   className,
 }: ChartProps) {
   const { resolvedTheme, theme } = useTheme();
@@ -278,8 +279,13 @@ export function ScatterChart({
     labelText: item.name, // Store name separately for label use
   }));
 
-  // Get unique categories to color the dots differently
-  const categories = Array.from(new Set(data.map(item => item.category || item.name)));
+  // Get unique categories and sort by bubble size (ascending) so larger dots render on top
+  let categories = Array.from(new Set(data.map(item => item.category || item.name)));
+  categories.sort((a, b) => {
+    const sizeA = data.find(item => (item.category || item.name) === a)?.[sizeKey] ?? 0;
+    const sizeB = data.find(item => (item.category || item.name) === b)?.[sizeKey] ?? 0;
+    return sizeA - sizeB;
+  });
 
   // Support both simple formatters and object formatters with x/y properties
   const formatY = typeof valueFormatter === 'object' && valueFormatter?.y 
@@ -299,20 +305,20 @@ export function ScatterChart({
       <ScatterChartRecharts
         margin={{
           top: 20,
-          right: 30,
+          right: 60,
           bottom: 50,
           left: 10,
         }}
       >
-        <CartesianGrid strokeDasharray="5 5" stroke="#555" />
+        <CartesianGrid strokeDasharray="5 5" stroke={isDarkMode ? '#4B5563' : '#D1D5DB'} />
         <XAxis 
           dataKey="x" 
           type="number" 
           name="penetration" 
           tickFormatter={formatX}
-          tick={{ fontSize: 12, fill: isDarkMode ? '#fff' : '#000' }}
-          tickLine={{ stroke: "#888" }}
-          axisLine={{ stroke: "#888" }}
+          tick={{ fontSize: 12, fill: isDarkMode ? '#fff' : '#4B5563' }}
+          tickLine={{ stroke: isDarkMode ? '#4B5563' : '#D1D5DB' }}
+          axisLine={{ stroke: isDarkMode ? '#4B5563' : '#D1D5DB' }}
           domain={xDomain}
           tickCount={5}
         >
@@ -332,9 +338,9 @@ export function ScatterChart({
           type="number" 
           name="availability"
           tickFormatter={formatY}
-          tick={{ fontSize: 12, fill: isDarkMode ? '#fff' : '#000' }}
-          tickLine={{ stroke: "#888" }}
-          axisLine={{ stroke: "#888" }}
+          tick={{ fontSize: 12, fill: isDarkMode ? '#fff' : '#4B5563' }}
+          tickLine={{ stroke: isDarkMode ? '#4B5563' : '#D1D5DB' }}
+          axisLine={{ stroke: isDarkMode ? '#4B5563' : '#D1D5DB' }}
           domain={yDomain}
           tickCount={5}
           width={80}
@@ -352,23 +358,28 @@ export function ScatterChart({
           />
         </YAxis>
         <Tooltip
+          content={({ active, payload }) => {
+            if (!active || !payload || !payload.length) return null;
+            const datum = payload[0].payload;
+            return (
+              <div style={{
+                backgroundColor: "#333",
+                border: "1px solid #666",
+                borderRadius: "4px",
+                padding: "10px",
+                color: "#fff",
+                boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)"
+              }}>
+                <div style={{ fontWeight: "bold", marginBottom: "5px" }}>
+                  {datum.name}
+                </div>
+                <div>Penetration: {formatX(datum.x)}</div>
+                <div>Availability: {formatY(datum.y)}</div>
+                <div>Coverage: {datum[sizeKey].toFixed(1)}%</div>
+              </div>
+            );
+          }}
           cursor={{ strokeDasharray: '3 3' }}
-          contentStyle={{ 
-            backgroundColor: "#333", 
-            border: "1px solid #666", 
-            borderRadius: "4px", 
-            color: "#fff",
-            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)",
-            padding: "10px"
-          }}
-          itemStyle={{ color: "#fff", fontSize: "12px" }}
-          labelStyle={{ fontWeight: "bold", color: "#fff", marginBottom: "5px" }}
-          formatter={(value: any, name: string) => {
-            if (name === 'penetration') return [formatX(value), 'Penetration'];
-            if (name === 'availability') return [formatY(value), 'Availability'];
-            if (name === sizeKey) return [value.toFixed(1) + '%', 'Coverage'];
-            return [value, name];
-          }}
         />
         {showLegend && 
           <Legend 
@@ -376,7 +387,7 @@ export function ScatterChart({
             verticalAlign="top" 
             iconType="circle"
             iconSize={10}
-            wrapperStyle={{ top: 10, right: 10 }} 
+            wrapperStyle={{ top: 10, right: 10, color: isDarkMode ? '#fff' : '#000' }} 
           />
         }
         
@@ -385,7 +396,7 @@ export function ScatterChart({
           const categoryData = enhancedData.filter(
             item => (item.category || item.name) === category
           );
-          const color = colors[index % colors.length];
+          const color = categoryColors?.[category] ?? colors[index % colors.length];
           
           return (
             <Scatter
@@ -428,7 +439,7 @@ const Size = ({
   cy, 
   dataKey, 
   scale = [1, 100], 
-  color = '#8b5cf6' 
+  color = '#9333EA' 
 }: { 
   payload: any; 
   cx: any; 

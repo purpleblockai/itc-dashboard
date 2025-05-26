@@ -138,6 +138,19 @@ interface DataContextType {
     city: string
     value: number
   }[]
+  // Add static platform insights to context type
+  lowestCoveragePlatform: {
+    name: string
+    coverageDelta: number
+    clientCoverage: number
+    competitorCoverage: number
+  } | null
+  lowestAvailabilityPlatform: {
+    name: string
+    availabilityDelta: number
+    clientAvailability: number
+    competitorAvailability: number
+  } | null
   refreshData: () => void
 }
 
@@ -332,11 +345,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const choroplethData = React.useMemo(() => getChoroplethData(filteredData), [filteredData])
   const cityChoroplethData = React.useMemo(() => getCityChoroplethData(filteredData), [filteredData])
   const coverageChoroplethData = React.useMemo(() => 
-    getHeatmapDataByType(filteredData, cityRegionalData, "coverage"), 
+    cityRegionalData.map(city => {
+      const cityName = (city.city || "").toLowerCase();
+      const cityDataItems = filteredData.filter(item => (item.city || "").toLowerCase() === cityName);
+      const metrics = calculateKPIs(cityDataItems);
+      return {
+        id: cityName,
+        city: city.city || "",
+        value: parseFloat(metrics.coverageMethod1.toFixed(1)),
+      };
+    }),
     [filteredData, cityRegionalData]
   )
   const penetrationChoroplethData = React.useMemo(() => 
-    getHeatmapDataByType(filteredData, cityRegionalData, "penetration"), 
+    cityRegionalData.map(city => {
+      const cityName = (city.city || "").toLowerCase();
+      const cityDataItems = filteredData.filter(item => (item.city || "").toLowerCase() === cityName);
+      const metrics = calculateKPIs(cityDataItems);
+      return {
+        id: cityName,
+        city: city.city || "",
+        value: parseFloat(metrics.penetration.toFixed(1)),
+      };
+    }),
     [filteredData, cityRegionalData]
   )
 
@@ -382,6 +413,54 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     fetchData()
   }
 
+  // Calculate static platform metrics independent of filters
+  const staticPlatformMetrics = React.useMemo(() => {
+    if (isLoading) return []
+    const clientNameFromData = clientFilteredData.find(item => item.clientName)?.clientName || ""
+    if (!clientNameFromData) return []
+    const map = new Map<string, { clientItems: ProcessedData[]; competitorItems: ProcessedData[] }>()
+    clientFilteredData.forEach(item => {
+      const platform = item.platform
+      if (!map.has(platform)) {
+        map.set(platform, { clientItems: [], competitorItems: [] })
+      }
+      const entry = map.get(platform)!
+      if (item.brand === clientNameFromData) {
+        entry.clientItems.push(item)
+      } else if (item.brand) {
+        entry.competitorItems.push(item)
+      }
+    })
+    return Array.from(map.entries()).map(([name, { clientItems, competitorItems }]) => {
+      const clientTotal = clientItems.length
+      const clientAvailable = clientItems.filter(i => i.availability === "Yes").length
+      const clientCoverage = clientTotal > 0 ? (clientAvailable / clientTotal) * 100 : 0
+      const clientListed = clientItems.filter(i => i.availability === "Yes" || i.availability === "No").length
+      const clientAvailability = clientListed > 0 ? (clientAvailable / clientListed) * 100 : 0
+      const compTotal = competitorItems.length
+      const compAvailable = competitorItems.filter(i => i.availability === "Yes").length
+      const competitorCoverage = compTotal > 0 ? (compAvailable / compTotal) * 100 : 0
+      const compListed = competitorItems.filter(i => i.availability === "Yes" || i.availability === "No").length
+      const competitorAvailability = compListed > 0 ? (compAvailable / compListed) * 100 : 0
+      return {
+        name,
+        clientCoverage: parseFloat(clientCoverage.toFixed(1)),
+        competitorCoverage: parseFloat(competitorCoverage.toFixed(1)),
+        coverageDelta: parseFloat((clientCoverage - competitorCoverage).toFixed(1)),
+        clientAvailability: parseFloat(clientAvailability.toFixed(1)),
+        competitorAvailability: parseFloat(competitorAvailability.toFixed(1)),
+        availabilityDelta: parseFloat((clientAvailability - competitorAvailability).toFixed(1)),
+      }
+    })
+  }, [clientFilteredData, isLoading])
+
+  const lowestCoveragePlatform = staticPlatformMetrics.length > 0
+    ? staticPlatformMetrics.reduce((prev, curr) => curr.clientCoverage < prev.clientCoverage ? curr : prev)
+    : null
+  const lowestAvailabilityPlatform = staticPlatformMetrics.length > 0
+    ? staticPlatformMetrics.reduce((prev, curr) => curr.clientAvailability < prev.clientAvailability ? curr : prev)
+    : null
+
   return (
     <DataContext.Provider
       value={{
@@ -401,6 +480,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         cityChoroplethData,
         coverageChoroplethData,
         penetrationChoroplethData,
+        lowestCoveragePlatform,
+        lowestAvailabilityPlatform,
         refreshData
       }}
     >

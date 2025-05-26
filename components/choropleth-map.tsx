@@ -55,8 +55,14 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
     // Calculate grid dimensions based on data
     const numCols = Math.min(Math.ceil(Math.sqrt(data.length * 1.5)), 12) // Wider grid for better readability
     const numRows = Math.ceil(data.length / numCols)
-    const cellWidth = innerWidth / numCols
-    const cellHeight = (height - margin.top - margin.bottom) / Math.max(numRows, 1)
+    // Base cell dimensions
+    const baseCellWidth = innerWidth / numCols
+    const baseCellHeight = (height - margin.top - margin.bottom) / Math.max(numRows, 1)
+    // Enforce minimum cell size for readability (scrollable container handles overflow)
+    const minCellWidth = 150
+    const minCellHeight = 80
+    const cellWidth = Math.max(baseCellWidth, minCellWidth)
+    const cellHeight = Math.max(baseCellHeight, minCellHeight)
 
     // For single city case, adjust the cell size to be centered
     const isSingleCity = data.length === 1
@@ -75,10 +81,23 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
     // Set the inner height based on grid content
     const innerHeight = gridHeight;
 
-    // Color scale - red to green for all metrics
+    // Define color gradient and legend stops based on metric type
+    let interpolator: (t: number) => string;
+    let legendStart = "";
+    let legendEnd = "";
+
+    // Override colors: low values red, high values green
+    interpolator = d3.interpolateRgb("#ff0000", "#00ff00");
+    legendStart = "#ff0000";
+    legendEnd = "#00ff00";
+
+    // Compute dynamic domain based on data values
+    const values = data.map(d => d.value);
+    const [minValue, maxValue] = d3.extent(values) as [number, number];
+
     const colorScale = d3.scaleSequential()
-      .domain([0, 100])
-      .interpolator(d3.interpolateRgb("#e53935", "#4caf50"));
+      .domain([minValue, maxValue])
+      .interpolator(interpolator);
 
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`)
 
@@ -252,8 +271,13 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
     
     // Increase the SVG height to accommodate the legend with more spacing
     svg.attr("height", margin.top + innerHeight + margin.bottom + 20) // Added 20px extra padding
+    // Set SVG width to total content width for horizontal scrolling
+    const totalWidth = margin.left + (cellWidth * numCols) + margin.right;
+    svg.attr("width", totalWidth);
 
-    const legendScale = d3.scaleLinear().domain([0, 100]).range([0, legendWidth])
+    const legendScale = d3.scaleLinear()
+      .domain([minValue, maxValue])
+      .range([0, legendWidth])
 
     const legendAxis = d3
       .axisBottom(legendScale)
@@ -269,9 +293,9 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
       .attr("x2", "100%")
       .attr("y2", "0%")
 
-    // Legend gradient stops - red to green scale
-    linearGradient.append("stop").attr("offset", "0%").attr("stop-color", "#e53935");
-    linearGradient.append("stop").attr("offset", "100%").attr("stop-color", "#4caf50");
+    // Legend gradient stops based on metric type
+    linearGradient.append("stop").attr("offset", "0%").attr("stop-color", legendStart);
+    linearGradient.append("stop").attr("offset", "100%").attr("stop-color", legendEnd);
 
     g.append("rect")
       .attr("x", legendX)
