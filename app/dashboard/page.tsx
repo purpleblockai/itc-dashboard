@@ -16,9 +16,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { useSession } from "next-auth/react"
 import { useFilters } from "@/components/filters/filter-provider"
-import { getCoverageByBrandData } from "@/lib/data-service"
 import { badgeVariants } from "@/components/ui/badge"
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { useToast } from "@/components/ui/use-toast"
 import {
   ResponsiveContainer,
@@ -42,10 +41,22 @@ interface ExtendedUser {
 }
 
 export default function DashboardPage() {
-  const { isLoading, error, kpis: originalKpis, timeSeriesData, platformShareData, refreshData, rawData, brandData, filteredData, lowestCoveragePlatform, lowestAvailabilityPlatform } = useData()
+  const startTimeRef = useRef<number>(performance.now());
+  const { isLoading, error, kpis: originalKpis, timeSeriesData, platformShareData, refreshData, rawData, brandData, filteredData, lowestCoveragePlatform, lowestAvailabilityPlatform, brandCoverage } = useData()
   const kpis = originalKpis as any;
   const { data: session } = useSession()
   const { filters } = useFilters()
+  
+  useEffect(() => {
+    const renderDuration = performance.now() - startTimeRef.current;
+    console.log(`DashboardPage initial render took ${renderDuration.toFixed(2)} ms`);
+  }, []);
+  useEffect(() => {
+    if (!isLoading) {
+      const loadDuration = performance.now() - startTimeRef.current;
+      console.log(`DashboardPage data load took ${loadDuration.toFixed(2)} ms`);
+    }
+  }, [isLoading]);
   
   // Cast the user to our extended type
   const user = session?.user as ExtendedUser | undefined;
@@ -67,8 +78,8 @@ export default function DashboardPage() {
     ? brandData.sort((a, b) => a.availability - b.availability)[0]
     : null
 
-  // Get competitor coverage data based on brands instead of platforms
-  const coverageByBrandData = !isLoading ? getCoverageByBrandData(filteredData) : []
+  // Use server-provided brand coverage when unfiltered
+  const coverageByBrandData = !isLoading ? brandCoverage : []
 
   // Get availability by brand data for dashboard
   const availabilityByBrandData = useMemo(() => {

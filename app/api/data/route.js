@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import {
+  calculateKPIs,
+  getTimeSeriesData,
+  getRegionalData,
+  getPlatformShareData,
+  getCoverageByBrandData,
+} from '@/lib/data-service';
 
 function parseReportDate(rawDate) {
   if (typeof rawDate === "string" && /^\d{2}-\d{2}-\d{4}$/.test(rawDate)) {
@@ -37,92 +44,193 @@ export async function GET(request) {
     // If user is not an admin, filter data by their assigned client and category
     if (role !== 'admin' && clientName) {
       query = { Client_Name: clientName, Category: category };
-      console.log(`Filtering data for client: ${clientName} and category: ${category}`);
     } else {
-      console.log('Admin user - showing all data');
     }
     
-    // Query data with appropriate filtering
-    const data = await db.collection('products')
-      .find(query)
-      .toArray();
-    
-    console.log(`[DATA] Retrieved ${data.length} raw records from database`);
-    
-    // Transform the MongoDB data to match the expected format in the frontend
-    const transformedData = data.map(item => {
-      // 1. parse into a JS Date, handle both 'Report_Date' and 'Report Date'
-      const rawDate = item.Report_Date ?? item['Report Date'] ?? "";
-      const dt = parseReportDate(rawDate);
-  
-      // 2. pull out only the YYYY-MM-DD
-      const year = dt.getFullYear();
-      const month = String(dt.getMonth() + 1).padStart(2, '0');
-      const day = String(dt.getDate()).padStart(2, '0');
-      const dateOnly = `${year}-${month}-${day}`;
-  
-      // availability flags
-      const availabilityStatus = item.Availability || "";
-      const isListed      = availabilityStatus === "Yes" || availabilityStatus === "No";
-      const isAvailable   = availabilityStatus === "Yes";
-  
-      return {
-        id:                item._id.toString(),
-        reportDate:        dateOnly,               // <-- now just "2025-05-10"
-        productId:         String(item.Unique_Product_ID || ""),
-        brand:             item.Brand || "",
-        clientName:        item.Client_Name || "",
-        productDescription: item.Name || "",
-        city:              item.City || "",
-        pincode:           String(item.Pincode || ""),
-        skuId:             String(item.SKU_ID || ""),
-        platform:          item.Platform || "",
-        mrp:               typeof item.MRP === "number" ? item.MRP : 0,
-        sellingPrice:      typeof item.Selling_Price === "number" ? item.Selling_Price : 0,
-        availability:      availabilityStatus,
-        discount:          item.Discount ? Number(item.Discount) : 0,
-        isListed,
-        stockAvailable:    isAvailable,
-        // no runDate here
-      };
-    });
-    
-    // Log statistics for debugging
-    const availabilityCounts = transformedData.reduce((acc, item) => {
-      acc[item.availability] = (acc[item.availability] || 0) + 1;
-      return acc;
-    }, {});
-    
-    console.log(`[DATA] Transformed data availability distribution:`, availabilityCounts);
-    console.log(`[DATA] Listed items: ${transformedData.filter(i => i.isListed).length}`);
-    console.log(`[DATA] Available items: ${transformedData.filter(i => i.stockAvailable).length}`);
-    
-    // Count unique pincodes with different statuses
-    const pincodeMap = transformedData.reduce((acc, item) => {
-      if (!acc[item.pincode]) {
-        acc[item.pincode] = { listed: false, available: false };
+    // Use MongoDB aggregation to compute rawData and all aggregates server-side
+    const pipeline = [
+      { $match: query },
+      { $addFields: { Report_Date: { $ifNull: ["$Report_Date", "$Report Date"] } } },
+      { $addFields: {
+        reportDateParsed: {
+          $ifNull: [
+            { $dateFromString: { dateString: '$Report_Date', format: '%d-%m-%Y', onError: null, onNull: null } },
+            { $dateFromString: { dateString: '$Report_Date', onError: null, onNull: null } }
+          ]
+        },
+        availabilityFlag: { $cond: [ { $in: ['$Availability', ['Yes', 'No']] }, 1, 0 ] },
+        availableFlag:    { $cond: [ { $eq: ['$Availability', 'Yes'] }, 1, 0 ] }
       }
-      if (item.isListed) acc[item.pincode].listed = true;
-      if (item.stockAvailable) acc[item.pincode].available = true;
-      return acc;
-    }, {});
-    
-    const listedPincodes = Object.values(pincodeMap).filter(p => p.listed).length;
-    const availablePincodes = Object.values(pincodeMap).filter(p => p.available).length;
-    
-    console.log(`[DATA] Unique pincodes: ${Object.keys(pincodeMap).length}`);
-    console.log(`[DATA] Listed pincodes: ${listedPincodes}`);
-    console.log(`[DATA] Available pincodes: ${availablePincodes}`);
-    const unserviceablePincodes = Object.keys(pincodeMap).filter(pincode => !pincodeMap[pincode].listed);
-    console.log(`[DATA] Unserviceable pincodes: ${unserviceablePincodes.length}`, unserviceablePincodes);
-    
-    // Return the transformed data
-    return NextResponse.json(transformedData);
-    
+    },
+      { $facet: {
+          rawData: [
+            { $project: {
+                id:               { $toString: '$_id' },
+                reportDate:       { $dateToString: { format: '%Y-%m-%d', date: '$reportDateParsed' } },
+                productId:        { $toString: '$Unique_Product_ID' },
+                brand:            '$Brand',
+                clientName:       '$Client_Name',
+                productDescription:'$Name',
+                city:             '$City',
+                pincode:          { $toString: '$Pincode' },
+                skuId:            '$SKU_ID',
+                platform:         '$Platform',
+                mrp:              { $toDouble: '$MRP' },
+                sellingPrice:     { $toDouble: '$Selling_Price' },
+                availability:     '$Availability',
+                discount:         { $toDouble: '$Discount' },
+                isListed:         '$availabilityFlag',
+                stockAvailable:   '$availableFlag',
+              }
+            }
+          ],
+          kpis: [
+            { $group: {
+                _id:      null,
+                total:    { $sum: 1 },
+                listed:   { $sum: '$availabilityFlag' },
+                available:{ $sum: '$availableFlag' },
+              }
+            },
+            { $project: {
+                _id:          0,
+                skusTracked:  '$total',
+                penetration: { $cond: [ { $gt: ['$total', 0] }, { $multiply: [ { $divide: ['$listed', '$total'] }, 100 ] }, 0 ] },
+                availability: { $cond: [ { $gt: ['$listed', 0] }, { $multiply: [ { $divide: ['$available', '$listed'] }, 100 ] }, 0 ] },
+                coverage:     { $cond: [ { $gt: ['$total', 0] }, { $multiply: [ { $divide: ['$available', '$total'] }, 100 ] }, 0 ] },
+              }
+            }
+          ],
+          timeSeriesData: [
+            { $group: {
+                _id: { $dateToString: { format: '%Y-%m-%d', date: '$reportDateParsed' } },
+                available: { $sum: '$availableFlag' },
+                listed: { $sum: '$availabilityFlag' }
+              }
+            },
+            { $project: {
+                _id: 0,
+                date: '$_id',
+                value: {
+                  $cond: [
+                    { $gt: ['$listed', 0] },
+                    { $round: [ { $multiply: [ { $divide: ['$available', '$listed'] }, 100 ] }, 0 ] },
+                    0
+                  ]
+                }
+              }
+            },
+            { $sort: { date: 1 } }
+          ],
+          regionalData: [
+            { $group: {
+                _id: { city: '$City', pincode: { $toString: '$Pincode' } },
+                available: { $sum: '$availableFlag' },
+                listed: { $sum: '$availabilityFlag' }
+              }
+            },
+            { $project: {
+                _id: 0,
+                city: '$_id.city',
+                pincode: '$_id.pincode',
+                stockAvailability: {
+                  $cond: [
+                    { $gt: ['$listed', 0] },
+                    { $round: [ { $multiply: [ { $divide: ['$available', '$listed'] }, 100 ] }, 0 ] },
+                    0
+                  ]
+                },
+                stockOutPercent: {
+                  $cond: [
+                    { $gt: ['$listed', 0] },
+                    { $round: [ { $multiply: [ { $divide: [ { $subtract: ['$listed', '$available'] }, '$listed' ] }, 100 ] }, 0 ] },
+                    0
+                  ]
+                }
+              }
+            },
+            { $sort: { city: 1, pincode: 1 } }
+          ],
+          platformShareData: [
+            { $group: {
+                _id: '$Platform',
+                count: { $sum: 1 }
+              }
+            },
+            { $group: {
+                _id: null,
+                total: { $sum: '$count' },
+                items: { $push: { name: '$_id', count: '$count' } }
+              }
+            },
+            { $unwind: '$items' },
+            { $project: {
+                _id: 0,
+                name: '$items.name',
+                value: {
+                  $cond: [
+                    { $gt: ['$total', 0] },
+                    { $round: [ { $multiply: [ { $divide: ['$items.count', '$total'] }, 100 ] }, 0 ] },
+                    0
+                  ]
+                }
+              }
+            },
+            { $sort: { value: -1 } }
+          ],
+          brandCoverage: [
+            { $group: {
+                _id: { brand: '$Brand', pincode: { $toString: '$Pincode' } },
+                available: { $sum: '$availableFlag' },
+                total: { $sum: 1 }
+              }
+            },
+            { $group: {
+                _id: '$_id.brand',
+                available: { $sum: '$available' },
+                total: { $sum: '$total' }
+              }
+            },
+            { $project: {
+                _id: 0,
+                name: '$_id',
+                coverage: {
+                  $cond: [
+                    { $gt: ['$total', 0] },
+                    { $round: [ { $multiply: [ { $divide: ['$available', '$total'] }, 100 ] }, 1 ] },
+                    0
+                  ]
+                }
+              }
+            },
+            { $sort: { coverage: -1 } }
+          ],
+        }
+      }
+    ];
+    const [result] = await db.collection('products').aggregate(pipeline).toArray();
+    const {
+      rawData,
+      timeSeriesData = [],
+      regionalData   = [],
+      platformShareData = [],
+      brandCoverage  = [],
+    } = result;
+
+    // Compute full KPIs (including lowestCoverageRegion, etc.) on server
+    const fullKpis = calculateKPIs(rawData);
+    return NextResponse.json({
+      rawData,
+      kpis: fullKpis,
+      timeSeriesData,
+      regionalData,
+      platformShareData,
+      brandCoverage,
+    });
   } catch (error) {
     console.error('API Error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch data' },
+      { error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

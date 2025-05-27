@@ -42,11 +42,8 @@ export default function BrandEvaluationPage() {
   const { resolvedTheme, theme } = useTheme();
   const isDarkMode = resolvedTheme === 'dark';
 
-  console.log("Sample productData:", productData.slice(0, 10));
-  console.log("isLoading:", isLoading);
 
   useEffect(() => {
-    console.log("productData changed:", productData);
   }, [productData]);
 
   // Function to calculate brand-level metrics from product data
@@ -69,7 +66,6 @@ export default function BrandEvaluationPage() {
   // Use the precomputed brandData if available; otherwise compute from scratch
   const brandData = !isLoading ? calculateBrandData(productData, filteredData) : [];
 
-  console.log("Final brandData:", brandData);
 
   // Define columns for the product data table with fixed widths and consistent styling
   const columns: ColumnDef<{
@@ -411,7 +407,6 @@ export default function BrandEvaluationPage() {
   ];
 
   // Add debug logs for BarChart data
-  console.log("brandData:", brandData);
   if (brandData && brandData.length > 0) {
     const missingAvgDiscount = brandData.filter(
       (b) => typeof b.avgDiscount !== "number" || isNaN(b.avgDiscount)

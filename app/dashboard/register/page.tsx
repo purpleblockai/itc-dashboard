@@ -44,22 +44,16 @@ export default function RegisterPage() {
   
   // Use useEffect for navigation instead of doing it during render
   useEffect(() => {
-    console.log("Session status:", status);
-    console.log("Session data:", session);
     
     // Only redirect if we have a definitive status
     if (status === "authenticated") {
       const typedSession = session as ExtendedSession;
-      console.log("User role:", typedSession?.user?.role);
       
       if (typedSession?.user?.role !== "admin") {
-        console.log("Redirecting to dashboard - not admin");
         router.push("/dashboard");
       } else {
-        console.log("User is admin, allowing access to register page");
       }
     } else if (status === "unauthenticated") {
-      console.log("Redirecting to login - unauthenticated");
       router.push("/login");
     }
   }, [status, session, router]);
