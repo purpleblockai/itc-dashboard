@@ -706,9 +706,9 @@ export default function BrandEvaluationPage() {
         {/* NEW: Horizontal Bar Chart - Brand Performance Comparison */}
         <Card className="card-hover overflow-hidden border-none shadow-lg">
           <CardHeader className="bg-gradient-to-r from-yellow-800 to-yellow-700 text-white pb-6">
-            <CardTitle className="text-2xl font-bold">Average Discount per Brand</CardTitle>
+            <CardTitle className="text-2xl font-bold">Average Discount by Brand</CardTitle>
             <CardDescription className="text-yellow-100 opacity-90">
-              Average discount percentage per top brands
+              Average discount percentage for each brand
             </CardDescription>
           </CardHeader>
           <CardContent className="h-[450px] p-6">

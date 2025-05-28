@@ -247,25 +247,25 @@ export default function DashboardPage() {
               title="SKUs Tracked" 
               value={kpis.skusTracked}
               icon={Icons.layers} 
-              tooltip="Total unique SKUs tracked in the system"
+              tooltip="This is the total number of unique SKUs that are being tracked in the system. It is calculated by taking the count of unique product names in the data."
             />
             <KpiCard
               title="Coverage"
               value={`${kpis.coverage.toFixed(1)}%`}
               icon={Icons.network}
-              tooltip="Coverage = Availability % × Penetration %"
+              tooltip="Coverage for a product is the percentage of total pincodes on which the said product is available to order."
             />
             <KpiCard 
               title="Penetration" 
               value={`${kpis.penetration.toFixed(1)}%`}
               icon={Icons.chart} 
-              tooltip="Penetration = Listed Pincodes / Serviceable Pincodes"
+              tooltip="Penetration for a product is the percentage of total pincodes on which the said product is listed. (May be out of stock but listed)"
             />
             <KpiCard
               title="Availability"
               value={`${kpis.availability.toFixed(1)}%`}
               icon={Icons.check}
-              tooltip="Availability = Available Pincodes / Listed Pincodes"
+              tooltip="Availability for a product is the percentage of listed pincodes on which your product is available to order. Listed pincodes are the pincodes on which your product is listed in the system."
             />
           </>
         )}
@@ -276,7 +276,7 @@ export default function DashboardPage() {
         <Card className="card-hover md:col-span-1">
           <CardHeader>
             <CardTitle>Coverage by Brand</CardTitle>
-            <CardDescription>Percentage of pincodes covered by each brand</CardDescription>
+            <CardDescription>Percentage of pincodes covered for each brand</CardDescription>
           </CardHeader>
           <CardContent className="h-[350px]">
             {isLoading ? (
@@ -355,7 +355,7 @@ export default function DashboardPage() {
         <Card className="card-hover">
           <CardHeader>
             <CardTitle>Average Product Prices</CardTitle>
-            <CardDescription>Average MRP and Selling Price per product</CardDescription>
+            <CardDescription>Average MRP and Selling Price for each product</CardDescription>
           </CardHeader>
           <CardContent className="h-[400px] overflow-x-scroll overflow-y-hidden">
             {isLoading ? (
@@ -363,8 +363,13 @@ export default function DashboardPage() {
             ) : avgPriceByProductData && avgPriceByProductData.length > 0 ? (
               <div style={{ width: '100%', minWidth: avgPriceByProductData.length * 200 }} className="h-full">
                 <BarChart
-                  data={avgPriceByProductData}
-                  categories={["avgMrp", "avgSp"]}
+                  // data={avgPriceByProductData}
+                  data={avgPriceByProductData.map(item => ({
+                    ...item,
+                    "Avg. MRP": item.avgMrp,
+                    "Avg. Selling Price": item.avgSp,
+                  }))}
+                  categories={["Avg. MRP", "Avg. Selling Price"]}
                   index="name"
                   colors={["#6B7280", "#F59E0B"]}
                   valueFormatter={(value: number) => `${value}`}
@@ -388,8 +393,8 @@ export default function DashboardPage() {
         </Card>
         <Card className="card-hover">
           <CardHeader>
-            <CardTitle>Average Discount by Product</CardTitle>
-            <CardDescription>Average Discount % per product</CardDescription>
+            <CardTitle>Average Discount for each Product</CardTitle>
+            <CardDescription>Average Discount % for each product</CardDescription>
           </CardHeader>
           <CardContent className="h-[400px] overflow-x-scroll overflow-y-hidden">
             {isLoading ? (
@@ -407,6 +412,7 @@ export default function DashboardPage() {
                   className="h-full w-full"
                   xAxisLabel="Product"
                   yAxisLabel="Discount %"
+                  xAxisProps={{ interval: 0, angle: -45, textAnchor: 'end' }}
                   labelFormatter={(label) => {
                     const item = avgDiscountByProductData.find(d => d.name === label);
                     return item?.fullName || label;
@@ -440,7 +446,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                View stock availability by pincode regions and identify geographical trends.
+                View stock availability, coverage, and penetration by pincode regions and identify geographical trends.
               </p>
             </CardContent>
           </Card>
@@ -456,7 +462,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Compare performance across Swiggy, Flipkart, Zepto, and Blinkit.
+                Compare performance across Swiggy Instamart, Zepto, and Blinkit.
               </p>
             </CardContent>
           </Card>

@@ -33,6 +33,7 @@ interface ChartProps {
   className?: string
   xAxisLabel?: string
   yAxisLabel?: string
+  xAxisProps?: any
   labelFormatter?: (label: any) => string
   sizeKey?: string
   sizeScale?: [number, number]
@@ -135,6 +136,7 @@ export function BarChart({
   className,
   xAxisLabel,
   yAxisLabel,
+  xAxisProps,
   labelFormatter,
 }: ChartProps) {
   if (!data || data.length === 0) {
@@ -154,6 +156,7 @@ export function BarChart({
           tick={{ fontSize: 12 }}
           tickLine={{ stroke: "#888" }}
           axisLine={{ stroke: "#888" }}
+          {...xAxisProps}
         >
           {xAxisLabel && <Label value={xAxisLabel} offset={-10} position="insideBottom" style={{ fontSize: '12px', fill: '#666' }} />}
         </XAxis>
