@@ -176,6 +176,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Determine if no UI filters are active
   const noFilters = React.useMemo(() =>
     filters.brand.length === 0 &&
+    filters.company.length === 0 &&
     filters.product.length === 0 &&
     filters.city.length === 0 &&
     filters.platform.length === 0 &&
@@ -196,6 +197,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       
       // Filter by brand
       if (filters.brand.length > 0 && !filters.brand.includes(item.brand)) {
+        return false
+      }
+
+      // Filter by company
+      if (filters.company.length > 0 && !filters.company.includes(item.company)) {
         return false
       }
 
@@ -379,8 +385,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Calculate static platform metrics independent of filters
   const staticPlatformMetrics = React.useMemo(() => {
     if (isLoading) return []
-    const clientNameFromData = clientFilteredData.find(item => item.clientName)?.clientName || ""
-    if (!clientNameFromData) return []
+    const clientCompanyFromData = clientFilteredData.find(item => item.company)?.company || ""
+    if (!clientCompanyFromData) return []
     const map = new Map<string, { clientItems: ProcessedData[]; competitorItems: ProcessedData[] }>()
     clientFilteredData.forEach(item => {
       const platform = item.platform
@@ -388,9 +394,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         map.set(platform, { clientItems: [], competitorItems: [] })
       }
       const entry = map.get(platform)!
-      if (item.brand === clientNameFromData) {
+      if (item.company === clientCompanyFromData) {
         entry.clientItems.push(item)
-      } else if (item.brand) {
+      } else if (item.company) {
         entry.competitorItems.push(item)
       }
     })

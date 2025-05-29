@@ -6,6 +6,7 @@ import { createContext, useContext, useState } from "react"
 
 export type FilterState = {
   brand: string[]
+  company: string[]
   product: string[]
   city: string[]
   pincode: string
@@ -24,6 +25,7 @@ export type FilterContextType = {
 
 const initialFilters: FilterState = {
   brand: [],
+  company: [],
   product: [],
   city: [],
   pincode: "",

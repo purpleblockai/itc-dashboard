@@ -5,6 +5,7 @@ export interface CompetitionData {
   Unique_Product_ID: number;    // 1
   Brand: string;                // "Bikaji"
   Client_Name: string;          // "Bikaji"
+  Company: string;              // "HUL"
   Name: string;                 // "Bhujia No.1 – 1 24"
   City: string;                 // "Mumbai"
   Pincode: number;              // 400013
@@ -25,6 +26,7 @@ export interface ProcessedData {
   productId: string;
   brand: string;
   clientName: string;
+  company: string;
   productDescription: string;
   city: string;
   pincode: string;
@@ -83,6 +85,7 @@ export function processUploadedData(data: any[]): ProcessedData[] {
       "Unique_Product_ID",
       "Brand",
       "Client_Name",
+      "Company",
       "Name",
       "City",
       "Pincode",
@@ -137,6 +140,7 @@ export function processRow(row: CompetitionData): ProcessedData {
     productId: String(row.Unique_Product_ID),
     brand: row.Brand,
     clientName: row.Client_Name,
+    company: row.Company,
     productDescription: row.Name,
     city: row.City.toLowerCase(),
     pincode: String(row.Pincode),
@@ -458,12 +462,12 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     };
   }
 
-  // Extract client name from data, strictly using the clientName field
+  // Extract client company from data, using the company field (fallback to clientName)
+  const clientCompany = data.find(item => item.company)?.company || '';
   const clientName = data.find(item => item.clientName)?.clientName || '';
-  
-  
-  // If no client name found, return empty data
-  if (!clientName) {
+
+  // If neither company nor client name found, return empty data
+  if (!clientCompany && !clientName) {
     return {
       lowestCoverageRegion: { name: "-", value: 0, delta: 0, competitorCoverage: 0 },
       highestAvailabilityDeltaRegion: { name: "-", value: 0, delta: 0 },
@@ -472,19 +476,18 @@ function calculateRegionalInsights(data: ProcessedData[]): {
   }
   
   // First separate client items from competitor items in the full dataset
-  // Client items are where the brand matches the client name (the client's own brand)
-  const allClientItems = data.filter(item => 
-    item.brand === clientName
-  );
-  
-  // Competitor items are where the brand doesn't match the client name
-  const allCompetitorItems = data.filter(item => 
-    item.brand && item.brand !== clientName && item.brand !== ""
-  );
-  
-  
+  // Client items are where the company matches the client company (fallback to brand if needed)
+  const allClientItems = clientCompany
+    ? data.filter(item => item.company === clientCompany)
+    : data.filter(item => item.brand === clientName);
+
+  // Competitor items are where the company doesn't match the client company (fallback to brand if needed)
+  const allCompetitorItems = clientCompany
+    ? data.filter(item => item.company && item.company !== clientCompany && item.company !== "")
+    : data.filter(item => item.brand && item.brand !== clientName && item.brand !== "");
+
   if (allClientItems.length === 0) {
-    // Fall back to using clientName field if no brand matches are found
+    // Fall back note: no company matches found, brand fallback used above
     const altClientItems = data.filter(item => item.clientName === clientName);
     if (altClientItems.length > 0) {
     }

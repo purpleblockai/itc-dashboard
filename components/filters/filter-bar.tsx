@@ -27,6 +27,10 @@ export function FilterBar() {
   const [cityOpen, setCityOpen] = useState(false)
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [products, setProducts] = useState<{ label: string; value: string }[]>([])
+  const [companyOpen, setCompanyOpen] = useState(false)
+  const [companies, setCompanies] = useState<{ label: string; value: string }[]>([
+    { label: "All Companies", value: "all" }
+  ])
 
   // Generate filter options from actual data
   const [brands, setBrands] = useState<{ label: string; value: string }[]>([{ label: "All Brands", value: "all" }])
@@ -45,6 +49,13 @@ export function FilterBar() {
       setBrands([
         { label: "All Brands", value: "all" },
         ...uniqueBrands.map((brand) => ({ label: brand, value: brand })),
+      ])
+
+      // Get unique companies
+      const uniqueCompanies = getUniqueValues(rawData, "company")
+      setCompanies([
+        { label: "All Companies", value: "all" },
+        ...uniqueCompanies.map((company) => ({ label: company, value: company })),
       ])
 
       // Get unique platforms
@@ -84,6 +95,7 @@ export function FilterBar() {
 
   // Derive actual filter options (exclude placeholder entries)
   const actualBrandOptions = brands.filter((b) => b.value !== "all");
+  const actualCompanyOptions = companies.filter((c) => c.value !== "all");
   const actualPlatformOptions = platforms.filter((p) => p.value !== "all");
   const actualCityOptions = cities.filter((c) => c.value !== "all");
 
@@ -149,6 +161,73 @@ export function FilterBar() {
                         )}
                       />
                       {b.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+
+        <Popover open={companyOpen} onOpenChange={setCompanyOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={companyOpen}
+              className="w-full justify-between md:w-[200px]"
+              disabled={isLoading}
+            >
+              {filters.company && filters.company.length > 0
+                ? `${filters.company.length} Companies`
+                : "Select Companies"}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-full p-0 md:w-[200px]">
+            <Command>
+              <CommandInput placeholder="Search companies..." />
+              <CommandList>
+                <CommandEmpty>No companies found.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    key="__all_companies"
+                    value="Select All Companies"
+                    onSelect={() => {
+                      const allValues = actualCompanyOptions.map((c) => c.value);
+                      const isAllSelected = filters.company.length === actualCompanyOptions.length;
+                      const newSelections = isAllSelected ? [] : allValues;
+                      setFilters({ company: newSelections });
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        filters.company.length === actualCompanyOptions.length
+                          ? "opacity-100"
+                          : "opacity-0"
+                      )}
+                    />
+                    Select All Companies
+                  </CommandItem>
+                  {actualCompanyOptions.map((c) => (
+                    <CommandItem
+                      key={c.value}
+                      value={c.label}
+                      onSelect={() => {
+                        const newSelections = filters.company.includes(c.value)
+                          ? filters.company.filter((v) => v !== c.value)
+                          : [...filters.company, c.value];
+                        setFilters({ company: newSelections });
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          filters.company.includes(c.value) ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      {c.label}
                     </CommandItem>
                   ))}
                 </CommandGroup>
