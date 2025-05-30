@@ -5,6 +5,7 @@ export interface CompetitionData {
   Unique_Product_ID: number;    // 1
   Brand: string;                // "Bikaji"
   Client_Name: string;          // "Bikaji"
+  Company: string;              // "HUL"
   Name: string;                 // "Bhujia No.1 – 1 24"
   City: string;                 // "Mumbai"
   Pincode: number;              // 400013
@@ -25,6 +26,7 @@ export interface ProcessedData {
   productId: string;
   brand: string;
   clientName: string;
+  company: string;
   productDescription: string;
   city: string;
   pincode: string;
@@ -38,8 +40,18 @@ export interface ProcessedData {
   stockAvailable: boolean;
 }
 
-// Function to fetch data from MongoDB API
-export async function fetchCompetitionData(): Promise<ProcessedData[]> {
+export interface DashboardPayload {
+  rawData: ProcessedData[];
+  kpis: ReturnType<typeof calculateKPIs>;
+  timeSeriesData: ReturnType<typeof getTimeSeriesData>;
+  regionalData: ReturnType<typeof getRegionalData>;
+  platformShareData: ReturnType<typeof getPlatformShareData>;
+  brandCoverage: ReturnType<typeof getCoverageByBrandData>;
+}
+
+// Function to fetch dashboard data (raw + aggregates)
+export async function fetchCompetitionData(): Promise<DashboardPayload> {
+  const start = performance.now();
   try {
     const response = await fetch("/api/data");
     
@@ -48,11 +60,15 @@ export async function fetchCompetitionData(): Promise<ProcessedData[]> {
       throw new Error(errorData.error || "Failed to fetch data");
     }
     
-    const data = await response.json();
-    return data;
+    const payload = await response.json();
+    // Expect payload shape: { rawData, kpis, timeSeriesData, regionalData, platformShareData, brandCoverage }
+    return payload as DashboardPayload;
   } catch (error) {
     console.error("Error fetching competition data:", error);
     throw error;
+  } finally {
+    const duration = performance.now() - start;
+    console.log(`fetchCompetitionData took ${duration.toFixed(2)} ms`);
   }
 }
 
@@ -69,6 +85,7 @@ export function processUploadedData(data: any[]): ProcessedData[] {
       "Unique_Product_ID",
       "Brand",
       "Client_Name",
+      "Company",
       "Name",
       "City",
       "Pincode",
@@ -123,6 +140,7 @@ export function processRow(row: CompetitionData): ProcessedData {
     productId: String(row.Unique_Product_ID),
     brand: row.Brand,
     clientName: row.Client_Name,
+    company: row.Company,
     productDescription: row.Name,
     city: row.City.toLowerCase(),
     pincode: String(row.Pincode),
@@ -156,7 +174,6 @@ export function getUniqueValues(
 
 // Function to calculate coverage across competitors
 function calculateCoverageAcrossCompetitors(data: ProcessedData[], competitorIds: string[]): number {
-  console.log(`[CALC] Calculating coverage across competitors: ${competitorIds.join(', ')}`);
   
   // Filter to include only the selected competitors
   const competitorData = data.filter(item => competitorIds.includes(item.platform));
@@ -201,16 +218,6 @@ function calculateCoverageAcrossCompetitors(data: ProcessedData[], competitorIds
   // Total items in serviceable pincodes
   const totalItems = serviceableItems.length;
   
-  // Add detailed logging
-  console.log(`[CALC] Coverage Across Competitors:
-    Total Competitors: ${competitorIds.length}
-    Serviceable Pincodes: ${serviceablePincodes.size}
-    Total Items in Serviceable Pincodes: ${totalItems}
-    Listed Items (Yes or No): ${listedItems}
-    Available Items (Yes): ${availableItems}
-    Serviceable Sample: ${Array.from(serviceablePincodes).slice(0, 3)}
-  `);
-  
   // Penetration = Number of Listed Items / Total Items in serviceable pincodes
   const penetration = totalItems > 0 ? 
     (listedItems / totalItems) * 100 : 0;
@@ -222,12 +229,6 @@ function calculateCoverageAcrossCompetitors(data: ProcessedData[], competitorIds
   // Coverage = Number of "Yes" Items / Total Items
   const coverage = totalItems > 0 ?
     (availableItems / totalItems) * 100 : 0;
-  
-  console.log(`[CALC] Coverage Calculation Results:
-    Penetration: ${penetration.toFixed(2)}%
-    Availability: ${availability.toFixed(2)}%
-    Coverage: ${coverage.toFixed(2)}%
-  `);
   
   return coverage;
 }
@@ -258,9 +259,6 @@ function calculateServiceableSKUs(data: ProcessedData[]): number {
     }
   });
   
-  console.log(`[CALC] Serviceable Pincodes: ${serviceablePincodes.size} pincodes`, 
-              Array.from(serviceablePincodes).slice(0, 5));
-  
   return serviceablePincodes.size;
 }
 
@@ -288,9 +286,6 @@ function calculateListedSKUs(data: ProcessedData[]): number {
     }
   });
   
-  console.log(`[CALC] Listed Pincodes: ${listedPincodes.size} pincodes`, 
-              Array.from(listedPincodes).slice(0, 5));
-  
   return listedPincodes.size;
 }
 
@@ -315,9 +310,6 @@ function calculateAvailableSKUs(data: ProcessedData[]): number {
       availablePincodes.add(pincode);
     }
   });
-  
-  console.log(`[CALC] Available Pincodes: ${availablePincodes.size} pincodes`, 
-              Array.from(availablePincodes).slice(0, 5));
   
   return availablePincodes.size;
 }
@@ -348,15 +340,11 @@ function calculateNotAvailableSKUs(data: ProcessedData[]): number {
     }
   });
   
-  console.log(`[CALC] Not Available Pincodes: ${notAvailablePincodes.size} pincodes`, 
-              Array.from(notAvailablePincodes).slice(0, 5));
-  
   return notAvailablePincodes.size;
 }
 
 // Function to calculate penetration
 function calculatePenetration(data: ProcessedData[]): number {
-  console.log(`[CALC] Starting penetration calculation with ${data.length} data points`);
   
   // Group data by pincode to determine serviceable and listed pincodes
   const pincodeMap = new Map<string, ProcessedData[]>();
@@ -393,27 +381,14 @@ function calculatePenetration(data: ProcessedData[]): number {
   // Total items in serviceable pincodes
   const totalItems = serviceableItems.length;
   
-  console.log(`[CALC] Penetration Calculation:
-    Serviceable Items: ${totalItems}
-    Listed Items: ${listedItems}
-    Serviceable Pincodes Sample: ${Array.from(serviceablePincodes).slice(0, 3)}
-  `);
-  
-  if (totalItems === 0) {
-    console.log(`[CALC] Penetration: 0% (no serviceable items)`);
-    return 0;
-  }
-  
   // Penetration = Number of Listed Items / Total Serviceable Items
   const penetration = (listedItems / totalItems) * 100;
-  console.log(`[CALC] Penetration: ${penetration.toFixed(2)}%`);
   
   return penetration;
 }
 
 // Function to calculate availability
 function calculateAvailability(data: ProcessedData[]): number {
-  console.log(`[CALC] Starting availability calculation with ${data.length} data points`);
   
   // Count items with "Yes" availability
   const availableItems = data.filter(item => item.availability === "Yes").length;
@@ -423,26 +398,14 @@ function calculateAvailability(data: ProcessedData[]): number {
     item.availability === "Yes" || item.availability === "No"
   ).length;
   
-  console.log(`[CALC] Availability Calculation:
-    Listed Items: ${listedItems}
-    Available Items: ${availableItems}
-  `);
-  
-  if (listedItems === 0) {
-    console.log(`[CALC] Availability: 0% (no listed items)`);
-    return 0;
-  }
-  
   // Availability = Number of "Yes" Items / Total Listed Items
   const availability = (availableItems / listedItems) * 100;
-  console.log(`[CALC] Availability: ${availability.toFixed(2)}%`);
   
   return availability;
 }
 
 // Function to calculate coverage
 function calculateCoverage(data: ProcessedData[]): number {
-  console.log(`[CALC] Starting coverage calculation with ${data.length} data points`);
   
   // Group data by pincode
   const pincodeMap = new Map<string, ProcessedData[]>();
@@ -479,20 +442,8 @@ function calculateCoverage(data: ProcessedData[]): number {
   // Total serviceable items
   const totalServiceableItems = serviceableItems.length;
   
-  console.log(`[CALC] Coverage Calculation:
-    Serviceable Pincodes: ${serviceablePincodes.size}
-    Total Serviceable Items: ${totalServiceableItems}
-    Available Items (Yes): ${availableItems}
-  `);
-  
-  if (totalServiceableItems === 0) {
-    console.log(`[CALC] Coverage: 0% (no serviceable items)`);
-    return 0;
-  }
-  
   // Coverage = Number of "Yes" Items / Total Serviceable Items
   const coverage = (availableItems / totalServiceableItems) * 100;
-  console.log(`[CALC] Coverage: ${coverage.toFixed(2)}%`);
   
   return coverage;
 }
@@ -511,14 +462,12 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     };
   }
 
-  // Extract client name from data, strictly using the clientName field
+  // Extract client company from data, using the company field (fallback to clientName)
+  const clientCompany = data.find(item => item.company)?.company || '';
   const clientName = data.find(item => item.clientName)?.clientName || '';
-  
-  console.log(`[INSIGHTS] Identified client name: "${clientName}"`);
-  
-  // If no client name found, return empty data
-  if (!clientName) {
-    console.log(`[INSIGHTS] Error: No client name found in the data!`);
+
+  // If neither company nor client name found, return empty data
+  if (!clientCompany && !clientName) {
     return {
       lowestCoverageRegion: { name: "-", value: 0, delta: 0, competitorCoverage: 0 },
       highestAvailabilityDeltaRegion: { name: "-", value: 0, delta: 0 },
@@ -527,29 +476,22 @@ function calculateRegionalInsights(data: ProcessedData[]): {
   }
   
   // First separate client items from competitor items in the full dataset
-  // Client items are where the brand matches the client name (the client's own brand)
-  const allClientItems = data.filter(item => 
-    item.brand === clientName
-  );
-  
-  // Competitor items are where the brand doesn't match the client name
-  const allCompetitorItems = data.filter(item => 
-    item.brand && item.brand !== clientName && item.brand !== ""
-  );
-  
-  console.log(`[INSIGHTS] Total client brand items: ${allClientItems.length}, competitor brand items: ${allCompetitorItems.length}`);
-  
+  // Client items are where the company matches the client company (fallback to brand if needed)
+  const allClientItems = clientCompany
+    ? data.filter(item => item.company === clientCompany)
+    : data.filter(item => item.brand === clientName);
+
+  // Competitor items are where the company doesn't match the client company (fallback to brand if needed)
+  const allCompetitorItems = clientCompany
+    ? data.filter(item => item.company && item.company !== clientCompany && item.company !== "")
+    : data.filter(item => item.brand && item.brand !== clientName && item.brand !== "");
+
   if (allClientItems.length === 0) {
-    console.log(`[INSIGHTS] Warning: No items found with brand matching client name "${clientName}"`);
-    // Fall back to using clientName field if no brand matches are found
+    // Fall back note: no company matches found, brand fallback used above
     const altClientItems = data.filter(item => item.clientName === clientName);
-    console.log(`[INSIGHTS] Falling back to clientName filter: ${altClientItems.length} items found`);
     if (altClientItems.length > 0) {
-      console.log(`[INSIGHTS] Sample item:`, altClientItems[0]);
     }
   } else {
-    console.log(`[INSIGHTS] Client sample:`, allClientItems.slice(0, 1).map(item => ({ brand: item.brand, clientName: item.clientName, city: item.city })));
-    console.log(`[INSIGHTS] Competitor sample:`, allCompetitorItems.slice(0, 1).map(item => ({ brand: item.brand, clientName: item.clientName, city: item.city })));
   }
   
   // Group data by city/region - for client items only
@@ -572,12 +514,6 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     competitorRegionMap.get(region)!.push(item);
   });
   
-  // Log competitor data by region for visibility
-  console.log(`[INSIGHTS] Competitor data summary by region:`);
-  competitorRegionMap.forEach((items, region) => {
-    console.log(`[INSIGHTS] ${region}: ${items.length} competitor items`);
-  });
-  
   // Get all regions where both client and competitors have data
   const commonRegions = Array.from(clientRegionMap.keys()).filter(region => 
     competitorRegionMap.has(region)
@@ -588,8 +524,6 @@ function calculateRegionalInsights(data: ProcessedData[]): {
   const allCompetitorRegions = Array.from(competitorRegionMap.keys());
   const allRegions = Array.from(new Set([...allClientRegions, ...allCompetitorRegions]));
   
-  console.log(`[INSIGHTS] Common regions with both client and competitor data: ${commonRegions.length}`);
-  console.log(`[INSIGHTS] All unique regions in dataset: ${allRegions.length}`);
 
   // Calculate coverage and availability for each region
   const regionMetrics = allRegions.map(region => {
@@ -689,27 +623,6 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     const competitorPenetration = competitorTotalItems > 0 ? (competitorListedItems / competitorTotalItems) * 100 : 0;
     const competitorAvailability = competitorListedItems > 0 ? (competitorAvailableItems / competitorListedItems) * 100 : 0;
     const competitorCoverage = competitorTotalItems > 0 ? (competitorAvailableItems / competitorTotalItems) * 100 : 0;
-    
-    // Log detailed competitor metrics for this region
-    if (competitorItems.length > 0) {
-      console.log(`[INSIGHTS] ${region} competitor metrics:
-        Total competitor items: ${competitorItems.length}
-        Serviceable competitor items: ${competitorServiceableItems.length}
-        Listed competitor items: ${competitorListedItems}
-        Available competitor items: ${competitorAvailableItems}
-        Competitor coverage: ${competitorCoverage.toFixed(1)}%
-        Competitor availability: ${competitorAvailability.toFixed(1)}%
-        Competitor penetration: ${competitorPenetration.toFixed(1)}%
-      `);
-      
-      // If client data also exists, show comparison
-      if (clientItems.length > 0) {
-        console.log(`[INSIGHTS] ${region} comparison:
-          Client coverage: ${clientCoverage.toFixed(1)}% vs Competitor coverage: ${competitorCoverage.toFixed(1)}%
-          Difference: ${(clientCoverage - competitorCoverage).toFixed(1)}%
-        `);
-      }
-    }
     
     // Calculate availability delta between client and competitors
     const availabilityDeltaFromCompetitors = competitorItems.length > 0 ?
@@ -872,14 +785,12 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     return region.clientItemCount > 0 || region.competitorItemCount > 0;
   });
   
-  console.log(`[INSIGHTS] Calculated metrics for ${regionMetrics.length} regions`);
 
   // Calculate overall competitor coverage across all regions
   const allCompetitorMetrics = regionMetrics.filter(region => region.hasCompetitorData);
   const aggregatedCompetitorCoverage = allCompetitorMetrics.length > 0 ?
     allCompetitorMetrics.reduce((sum, region) => sum + region.competitorCoverage, 0) / allCompetitorMetrics.length : 0;
   
-  console.log(`[INSIGHTS] Aggregated competitor coverage across all regions: ${aggregatedCompetitorCoverage.toFixed(1)}%`);
   
   // Find lowest coverage region for client brand - only consider regions where client brand exists
   const clientRegionMetrics = regionMetrics.filter(region => region.hasClientData);
@@ -922,13 +833,6 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     (regionsWithBothData.length > 0 ? 
       regionsWithBothData.sort((a, b) => a.availability - b.availability)[0] :
       emptyRegionMetric);
-  
-  // Log the results
-  console.log(`[INSIGHTS] Lowest coverage region: ${lowestCoverageRegion.name} (${lowestCoverageRegion.coverage.toFixed(1)}%)`);
-  console.log(`[INSIGHTS] Competitor coverage in this region: ${lowestCoverageRegion.competitorCoverage.toFixed(1)}%`);
-  console.log(`[INSIGHTS] Aggregated competitor coverage across all regions: ${aggregatedCompetitorCoverage.toFixed(1)}%`);
-  
-  console.log(`[INSIGHTS] Largest availability gap: ${largestNegativeAvailabilityGap.name} (Client: ${largestNegativeAvailabilityGap.availability.toFixed(1)}%, Competitors: ${largestNegativeAvailabilityGap.competitorAvailability.toFixed(1)}%)`);
   
   // Return lowest coverage region, using the region-specific competitor coverage
   return {
@@ -985,10 +889,8 @@ function calculateAverageDiscount(data: ProcessedData[]): number {
 
 // Function to calculate KPIs
 export function calculateKPIs(data: ProcessedData[]) {
-  console.log(`[CALC] Starting KPI calculations with ${data.length} data points`);
   
   if (data.length === 0) {
-    console.log(`[CALC] No data points provided for KPI calculation`);
     return {
       skusTracked: 0,
       avgDiscount: 0,
@@ -1031,11 +933,9 @@ export function calculateKPIs(data: ProcessedData[]) {
 
   // Calculate total number of unique SKUs (counted by Unique_Product_ID)
   const uniqueSkus = new Set(data.map((item) => item.productId)).size;
-  console.log(`[CALC] Unique SKUs (by Unique_Product_ID): ${uniqueSkus}`);
 
   // Calculate total number of unique pincodes
   const totalPincodes = new Set(data.map((item) => item.pincode)).size;
-  console.log(`[CALC] Total Unique Pincodes: ${totalPincodes}`);
 
   // Calculate average discount - specifically for client data
   const clientData = data.filter(item => item.clientName); // Only filter by clientName when client_name exists
@@ -1056,7 +956,6 @@ export function calculateKPIs(data: ProcessedData[]) {
     ? totalDiscount / validClientData.length 
     : (validNonClientData.length ? totalDiscount / validNonClientData.length : 0);
   
-  console.log(`[CALC] Average Discount: ${avgDiscount.toFixed(2)}%`);
 
   // Find top platform by count
   const platformCounts = data.reduce((counts, item) => {
@@ -1068,7 +967,6 @@ export function calculateKPIs(data: ProcessedData[]) {
     .sort((a, b) => b[1] - a[1])
     .map(([platform]) => platform)[0];
   
-  console.log(`[CALC] Top Platform: ${topPlatform}`);
 
   // Calculate stock-out percentage
   const availabilityStatus = data.reduce((acc, item) => {
@@ -1190,12 +1088,6 @@ export function calculateKPIs(data: ProcessedData[]) {
     coverageMethod1,
     coverageMethod2,
   };
-
-  console.log("[CALC] RETURNED METRICS:", JSON.stringify({
-    penetration: returnObject.penetration,
-    availability: returnObject.availability,
-    coverage: returnObject.coverage
-  }, null, 2));
   
   return returnObject;
 }

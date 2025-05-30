@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState } from "react"
+import React, { createContext, useContext, useEffect, useState, useRef } from "react"
 import { useSession } from "next-auth/react"
 import {
   fetchCompetitionData,
@@ -16,6 +16,8 @@ import {
   getCityRegionalData,
   getCityChoroplethData,
   getHeatmapDataByType,
+  getCoverageByBrandData,
+  DashboardPayload,
 } from "@/lib/data-service"
 import { useFilters } from "./filters/filter-provider"
 import { parseISO } from 'date-fns'
@@ -112,6 +114,8 @@ interface DataContextType {
       availability: number
     }[]
   }[]
+  // Coverage by brand for dashboard
+  brandCoverage: { name: string; coverage: number }[]
   productData: {
     brand: string
     name: string
@@ -138,6 +142,19 @@ interface DataContextType {
     city: string
     value: number
   }[]
+  // Add static platform insights to context type
+  lowestCoveragePlatform: {
+    name: string
+    coverageDelta: number
+    clientCoverage: number
+    competitorCoverage: number
+  } | null
+  lowestAvailabilityPlatform: {
+    name: string
+    availabilityDelta: number
+    clientAvailability: number
+    competitorAvailability: number
+  } | null
   refreshData: () => void
 }
 
@@ -147,6 +164,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [rawData, setRawData] = useState<ProcessedData[]>([])
+  const [serverDashboard, setServerDashboard] = useState<DashboardPayload | null>(null)
   const { filters } = useFilters()
   const { data: session } = useSession()
   
@@ -155,7 +173,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = user?.role === "admin";
   const userClientName = user?.clientName;
 
-  // const filteredData = rawData
+  // Determine if no UI filters are active
+  const noFilters = React.useMemo(() =>
+    filters.brand.length === 0 &&
+    filters.company.length === 0 &&
+    filters.product.length === 0 &&
+    filters.city.length === 0 &&
+    filters.platform.length === 0 &&
+    !filters.pincode &&
+    !filters.dateRange.from,
+    [filters]
+  )
 
   // Filter data based on selected filters and user's client
   const filteredData = React.useMemo(() => {
@@ -169,6 +197,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       
       // Filter by brand
       if (filters.brand.length > 0 && !filters.brand.includes(item.brand)) {
+        return false
+      }
+
+      // Filter by company
+      if (filters.company.length > 0 && !filters.company.includes(item.company)) {
         return false
       }
 
@@ -237,118 +270,80 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     })
   }, [rawData, isAdmin, userClientName])
 
-  // Calculate KPIs using filtered data for most metrics
+  // Use server-provided or client-computed aggregates
   const kpis = React.useMemo(() => {
-    console.log("🛠 Active Filters:", filters)
-    console.log("🛠 rawData.length:", rawData.length)
-    console.log("🛠 filteredData.length:", filteredData.length)
-    
-    const filteredKpis = calculateKPIs(filteredData);
-    
-    // If filteredData is empty (e.g., due to date filter) return empty insights
-    if (filteredData.length === 0) {
-      return {
-        ...filteredKpis,
-        lowestCoverageRegion: {
-          name: "No Data",
-          value: 0,
-          delta: 0,
-          competitorCoverage: 0
-        },
-        highestAvailabilityDeltaRegion: {
-          name: "No Data",
-          value: 0,
-          delta: 0
-        },
-        highestAvailabilityDeltaFromCompetitors: {
-          name: "No Data",
-          value: 0,
-          competitors: 0,
-          delta: 0
-        }
-      };
-    }
-    
-    // Apply client filter but keep date and other filters for key insights
-    const keyInsightsData = clientFilteredData.filter(item => {
-      // Filter by selected date or date range for insights
-      if (filters.dateRange.from) {
-        const itemDate = new Date(item.reportDate);
-        const fromDate = new Date(filters.dateRange.from);
-        // Normalize fromDate to start of day
-        fromDate.setHours(0, 0, 0, 0);
-        if (filters.dateRange.to) {
-          // Range selected: include up to end of toDate
-          const toDate = new Date(filters.dateRange.to);
-          toDate.setHours(23, 59, 59, 999);
-          if (itemDate < fromDate || itemDate > toDate) {
-            return false;
-          }
-        } else {
-          // Single date selected: match exact date only
-          if (
-            itemDate.getFullYear() !== fromDate.getFullYear() ||
-            itemDate.getMonth() !== fromDate.getMonth() ||
-            itemDate.getDate() !== fromDate.getDate()
-          ) {
-            return false;
-          }
-        }
-      }
-      return true;
-    });
-    
-    // Calculate insights based on the filtered data
-    const fullDataKpis = calculateKPIs(keyInsightsData);
-    
-    // Use key insights from the proper dataset
-    return {
-      ...filteredKpis,
-      lowestCoverageRegion: {
-        name: fullDataKpis.lowestCoverageRegion.name,
-        value: fullDataKpis.lowestCoverageRegion.value,
-        delta: fullDataKpis.lowestCoverageRegion.delta,
-        competitorCoverage: (fullDataKpis.lowestCoverageRegion as any).competitorCoverage || 0
-      },
-      highestAvailabilityDeltaRegion: fullDataKpis.highestAvailabilityDeltaRegion,
-      highestAvailabilityDeltaFromCompetitors: fullDataKpis.highestAvailabilityDeltaFromCompetitors
-    };
-  }, [filteredData, clientFilteredData, filters.dateRange]);
+    if (serverDashboard && noFilters) return serverDashboard.kpis;
+    return calculateKPIs(filteredData);
+  }, [serverDashboard, filteredData, noFilters]);
 
   // Calculate other metrics using filtered data
-  const timeSeriesData = React.useMemo(() => getTimeSeriesData(filteredData), [filteredData])
-  const regionalData = React.useMemo(() => getRegionalData(filteredData), [filteredData])
+  const timeSeriesData = React.useMemo(() => {
+    if (serverDashboard && noFilters) return serverDashboard.timeSeriesData;
+    return getTimeSeriesData(filteredData);
+  }, [serverDashboard, filteredData, noFilters]);
+  const regionalData = React.useMemo(() => {
+    if (serverDashboard && noFilters) return serverDashboard.regionalData;
+    return getRegionalData(filteredData);
+  }, [serverDashboard, filteredData, noFilters]);
   const cityRegionalData = React.useMemo(() => getCityRegionalData(filteredData), [filteredData])
   const platformData = React.useMemo(() => getPlatformData(filteredData), [filteredData])
-  const platformShareData = React.useMemo(
-    () => getPlatformShareData(
+  const platformShareData = React.useMemo(() => {
+    if (serverDashboard && noFilters) return serverDashboard.platformShareData;
+    return getPlatformShareData(
       filteredData,
       filters.brand.length === 1 ? filters.brand[0] : undefined
-    ),
-    [filteredData, filters.brand],
-  )
+    );
+  }, [serverDashboard, filteredData, filters, noFilters]);
   const brandData = React.useMemo(() => getBrandData(filteredData), [filteredData])
   const productData = React.useMemo(() => getProductData(filteredData), [filteredData])
   const choroplethData = React.useMemo(() => getChoroplethData(filteredData), [filteredData])
   const cityChoroplethData = React.useMemo(() => getCityChoroplethData(filteredData), [filteredData])
   const coverageChoroplethData = React.useMemo(() => 
-    getHeatmapDataByType(filteredData, cityRegionalData, "coverage"), 
+    cityRegionalData.map(city => {
+      const cityName = (city.city || "").toLowerCase();
+      const cityDataItems = filteredData.filter(item => (item.city || "").toLowerCase() === cityName);
+      const metrics = calculateKPIs(cityDataItems);
+      return {
+        id: cityName,
+        city: city.city || "",
+        value: parseFloat(metrics.coverageMethod1.toFixed(1)),
+      };
+    }),
     [filteredData, cityRegionalData]
   )
   const penetrationChoroplethData = React.useMemo(() => 
-    getHeatmapDataByType(filteredData, cityRegionalData, "penetration"), 
+    cityRegionalData.map(city => {
+      const cityName = (city.city || "").toLowerCase();
+      const cityDataItems = filteredData.filter(item => (item.city || "").toLowerCase() === cityName);
+      const metrics = calculateKPIs(cityDataItems);
+      return {
+        id: cityName,
+        city: city.city || "",
+        value: parseFloat(metrics.penetration.toFixed(1)),
+      };
+    }),
     [filteredData, cityRegionalData]
   )
 
+  // Coverage by brand data (server or client)
+  const brandCoverage = React.useMemo(() => {
+    if (serverDashboard && noFilters) return serverDashboard.brandCoverage;
+    return getCoverageByBrandData(filteredData);
+  }, [serverDashboard, filteredData, noFilters]);
+
   // Fetch data on component mount
   const fetchData = async () => {
+    const payloadStart = performance.now();
     try {
       setIsLoading(true)
-      const data = await fetchCompetitionData()        // already ProcessedData[]
-      const parsed = data.map(r => ({
+      const payload = await fetchCompetitionData()        // DashboardPayload
+      setServerDashboard(payload)
+      const parsed = payload.rawData.map(r => ({
         ...r,
-        // parse 'YYYY-MM-DD' string into local Date to avoid timezone shifts
-        reportDate: parseISO(r.reportDate as unknown as string)
+        // parse 'YYYY-MM-DD' string into local Date to avoid timezone shifts, fallback to now if missing
+        reportDate: typeof r.reportDate === 'string' && r.reportDate
+          ? parseISO(r.reportDate)
+          : new Date()
       }))
       setRawData(parsed)
       setError(null)
@@ -356,10 +351,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setError(err instanceof Error ? err : new Error("Unknown error occurred"))
     } finally {
       setIsLoading(false)
+      const duration = performance.now() - payloadStart;
+      console.log(`DataProvider.fetchData took ${duration.toFixed(2)} ms`);
     }
   }
 
+  // Prevent double-fetch in React StrictMode by guarding the initial fetch
+  const hasFetchedRef = useRef(false)
   useEffect(() => {
+    if (hasFetchedRef.current) return
+    hasFetchedRef.current = true
     fetchData()
   }, [])
 
@@ -374,13 +375,60 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (item.stockAvailable) pincodeMap[item.pincode].available = true;
       });
       const unserviceablePincodes = Object.keys(pincodeMap).filter(pincode => !pincodeMap[pincode].listed);
-      console.log(`[DATA] Unserviceable pincodes: ${unserviceablePincodes.length}`, unserviceablePincodes);
     }
   }, [isLoading, rawData])
 
   const refreshData = () => {
     fetchData()
   }
+
+  // Calculate static platform metrics independent of filters
+  const staticPlatformMetrics = React.useMemo(() => {
+    if (isLoading) return []
+    const clientCompanyFromData = clientFilteredData.find(item => item.company)?.company || ""
+    if (!clientCompanyFromData) return []
+    const map = new Map<string, { clientItems: ProcessedData[]; competitorItems: ProcessedData[] }>()
+    clientFilteredData.forEach(item => {
+      const platform = item.platform
+      if (!map.has(platform)) {
+        map.set(platform, { clientItems: [], competitorItems: [] })
+      }
+      const entry = map.get(platform)!
+      if (item.company === clientCompanyFromData) {
+        entry.clientItems.push(item)
+      } else if (item.company) {
+        entry.competitorItems.push(item)
+      }
+    })
+    return Array.from(map.entries()).map(([name, { clientItems, competitorItems }]) => {
+      const clientTotal = clientItems.length
+      const clientAvailable = clientItems.filter(i => i.availability === "Yes").length
+      const clientCoverage = clientTotal > 0 ? (clientAvailable / clientTotal) * 100 : 0
+      const clientListed = clientItems.filter(i => i.availability === "Yes" || i.availability === "No").length
+      const clientAvailability = clientListed > 0 ? (clientAvailable / clientListed) * 100 : 0
+      const compTotal = competitorItems.length
+      const compAvailable = competitorItems.filter(i => i.availability === "Yes").length
+      const competitorCoverage = compTotal > 0 ? (compAvailable / compTotal) * 100 : 0
+      const compListed = competitorItems.filter(i => i.availability === "Yes" || i.availability === "No").length
+      const competitorAvailability = compListed > 0 ? (compAvailable / compListed) * 100 : 0
+      return {
+        name,
+        clientCoverage: parseFloat(clientCoverage.toFixed(1)),
+        competitorCoverage: parseFloat(competitorCoverage.toFixed(1)),
+        coverageDelta: parseFloat((clientCoverage - competitorCoverage).toFixed(1)),
+        clientAvailability: parseFloat(clientAvailability.toFixed(1)),
+        competitorAvailability: parseFloat(competitorAvailability.toFixed(1)),
+        availabilityDelta: parseFloat((clientAvailability - competitorAvailability).toFixed(1)),
+      }
+    })
+  }, [clientFilteredData, isLoading])
+
+  const lowestCoveragePlatform = staticPlatformMetrics.length > 0
+    ? staticPlatformMetrics.reduce((prev, curr) => curr.clientCoverage < prev.clientCoverage ? curr : prev)
+    : null
+  const lowestAvailabilityPlatform = staticPlatformMetrics.length > 0
+    ? staticPlatformMetrics.reduce((prev, curr) => curr.clientAvailability < prev.clientAvailability ? curr : prev)
+    : null
 
   return (
     <DataContext.Provider
@@ -396,11 +444,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         platformData,
         platformShareData,
         brandData,
+        brandCoverage,
         productData,
         choroplethData,
         cityChoroplethData,
         coverageChoroplethData,
         penetrationChoroplethData,
+        lowestCoveragePlatform,
+        lowestAvailabilityPlatform,
         refreshData
       }}
     >
