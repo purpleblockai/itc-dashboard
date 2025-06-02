@@ -427,8 +427,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Calculate static platform metrics independent of filters
   const staticPlatformMetrics = React.useMemo(() => {
     if (isLoading) return [];
-    // Determine client company by finding the company for client's own brand rows
-    const clientCompanyFromData = clientFilteredData.find(item => item.brand === userClientName)?.company || "";
+    // Determine client company by finding the company for client's own records
+    const clientCompanyFromData = clientFilteredData.find(item => item.company === userClientName)?.company || "";
     if (!clientCompanyFromData) return [];
     const map = new Map<string, { clientItems: ProcessedData[]; competitorItems: ProcessedData[] }>()
     clientFilteredData.forEach(item => {
