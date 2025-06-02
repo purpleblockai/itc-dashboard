@@ -464,8 +464,8 @@ function calculateRegionalInsights(data: ProcessedData[]): {
 
   // Extract client name and client company correctly
   const clientName = data.find(item => item.clientName)?.clientName || '';
-  // Determine clientCompany by finding rows where brand matches clientName
-  const clientCompany = data.find(item => item.brand === clientName)?.company || '';
+  // Determine clientCompany based on clientName
+  const clientCompany = data.find(item => item.company === clientName)?.company || '';
 
   // If no clientName or clientCompany found, return empty data
   if (!clientName || !clientCompany) {
