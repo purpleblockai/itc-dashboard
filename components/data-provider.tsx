@@ -156,6 +156,43 @@ interface DataContextType {
     competitorAvailability: number
   } | null
   refreshData: () => void
+  serverKpis: {
+    skusTracked: number
+    avgDiscount: number
+    topPlatform: string
+    stockOutPercentage: number
+    stockOutDelta: number
+    avgDiscountDelta: number
+    competitorCoverage: number
+    totalSKUs: number
+    serviceableSKUs: number
+    listedSKUs: number
+    availableSKUs: number
+    notAvailableSKUs?: number
+    penetration: number
+    availability: number
+    coverage: number
+    coverageMethod1: number
+    coverageMethod2: number
+    discount: number
+    lowestCoverageRegion: {
+      name: string
+      value: number
+      delta: number
+      competitorCoverage: number
+    }
+    highestAvailabilityDeltaRegion: {
+      name: string
+      value: number
+      delta: number
+    }
+    highestAvailabilityDeltaFromCompetitors: {
+      name: string
+      value: number
+      competitors: number
+      delta: number
+    }
+  }
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined)
@@ -276,6 +313,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return calculateKPIs(filteredData);
   }, [serverDashboard, filteredData, noFilters]);
 
+  // Always get server-side KPIs (full data) for Key Insights
+  const serverKpis = React.useMemo(() => {
+    return serverDashboard?.kpis ?? calculateKPIs(rawData);
+  }, [serverDashboard, rawData]);
+
   // Calculate other metrics using filtered data
   const timeSeriesData = React.useMemo(() => {
     if (serverDashboard && noFilters) return serverDashboard.timeSeriesData;
@@ -384,9 +426,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Calculate static platform metrics independent of filters
   const staticPlatformMetrics = React.useMemo(() => {
-    if (isLoading) return []
-    const clientCompanyFromData = clientFilteredData.find(item => item.company)?.company || ""
-    if (!clientCompanyFromData) return []
+    if (isLoading) return [];
+    // Determine client company by finding the company for client's own brand rows
+    const clientCompanyFromData = clientFilteredData.find(item => item.brand === userClientName)?.company || "";
+    if (!clientCompanyFromData) return [];
     const map = new Map<string, { clientItems: ProcessedData[]; competitorItems: ProcessedData[] }>()
     clientFilteredData.forEach(item => {
       const platform = item.platform
@@ -421,7 +464,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         availabilityDelta: parseFloat((clientAvailability - competitorAvailability).toFixed(1)),
       }
     })
-  }, [clientFilteredData, isLoading])
+  }, [clientFilteredData, isLoading, userClientName])
 
   const lowestCoveragePlatform = staticPlatformMetrics.length > 0
     ? staticPlatformMetrics.reduce((prev, curr) => curr.clientCoverage < prev.clientCoverage ? curr : prev)
@@ -438,6 +481,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         rawData,
         filteredData,
         kpis,
+        serverKpis,
         timeSeriesData,
         regionalData,
         cityRegionalData,
