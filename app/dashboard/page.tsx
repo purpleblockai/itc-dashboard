@@ -42,7 +42,7 @@ interface ExtendedUser {
 
 export default function DashboardPage() {
   const startTimeRef = useRef<number>(performance.now());
-  const { isLoading, error, kpis: originalKpis, timeSeriesData, platformShareData, refreshData, rawData, brandData, filteredData, lowestCoveragePlatform, lowestAvailabilityPlatform, brandCoverage } = useData()
+  const { isLoading, error, kpis: originalKpis, serverKpis, timeSeriesData, platformShareData, refreshData, rawData, brandData, filteredData, lowestCoveragePlatform, lowestAvailabilityPlatform, brandCoverage } = useData()
   const kpis = originalKpis as any;
   const { data: session } = useSession()
   const { filters } = useFilters()
@@ -429,7 +429,7 @@ export default function DashboardPage() {
       </div>
 
       <KeyInsights
-        kpis={kpis}
+        kpis={serverKpis as any}
         lowestCoveragePlatform={lowestCoveragePlatform}
         lowestAvailabilityPlatform={lowestAvailabilityPlatform}
       />

@@ -462,12 +462,13 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     };
   }
 
-  // Extract client company from data, using the company field (fallback to clientName)
-  const clientCompany = data.find(item => item.company)?.company || '';
+  // Extract client name and client company correctly
   const clientName = data.find(item => item.clientName)?.clientName || '';
+  // Determine clientCompany by finding rows where brand matches clientName
+  const clientCompany = data.find(item => item.brand === clientName)?.company || '';
 
-  // If neither company nor client name found, return empty data
-  if (!clientCompany && !clientName) {
+  // If no clientName or clientCompany found, return empty data
+  if (!clientName || !clientCompany) {
     return {
       lowestCoverageRegion: { name: "-", value: 0, delta: 0, competitorCoverage: 0 },
       highestAvailabilityDeltaRegion: { name: "-", value: 0, delta: 0 },
@@ -475,20 +476,15 @@ function calculateRegionalInsights(data: ProcessedData[]): {
     };
   }
   
-  // First separate client items from competitor items in the full dataset
-  // Client items are where the company matches the client company (fallback to brand if needed)
-  const allClientItems = clientCompany
-    ? data.filter(item => item.company === clientCompany)
-    : data.filter(item => item.brand === clientName);
+  // Client items are those with matching company (based on client brand rows)
+  const allClientItems = data.filter(item => item.company === clientCompany);
 
-  // Competitor items are where the company doesn't match the client company (fallback to brand if needed)
-  const allCompetitorItems = clientCompany
-    ? data.filter(item => item.company && item.company !== clientCompany && item.company !== "")
-    : data.filter(item => item.brand && item.brand !== clientName && item.brand !== "");
+  // Competitor items are those with a different company
+  const allCompetitorItems = data.filter(item => item.company && item.company !== clientCompany);
 
   if (allClientItems.length === 0) {
-    // Fall back note: no company matches found, brand fallback used above
-    const altClientItems = data.filter(item => item.clientName === clientName);
+    // Fall back: if no items found matching clientCompany, use clientName brand rows
+    const altClientItems = data.filter(item => item.brand === clientName);
     if (altClientItems.length > 0) {
     }
   } else {
