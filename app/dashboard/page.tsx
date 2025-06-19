@@ -42,21 +42,10 @@ interface ExtendedUser {
 
 export default function DashboardPage() {
   const startTimeRef = useRef<number>(performance.now());
-  const { isLoading, error, kpis: originalKpis, serverKpis, timeSeriesData, platformShareData, refreshData, rawData, brandData, filteredData, lowestCoveragePlatform, lowestAvailabilityPlatform, brandCoverage } = useData()
+  const { isLoading, error, kpis: originalKpis, serverKpis, timeSeriesData, platformShareData, refreshData, rawData, brandData, filteredData, normalizedSummaryData, summaryAvailabilityByBrand, summaryPenetrationByBrand, lowestCoveragePlatform, lowestAvailabilityPlatform, brandCoverage } = useData()
   const kpis = originalKpis as any;
   const { data: session } = useSession()
   const { filters } = useFilters()
-  
-  useEffect(() => {
-    const renderDuration = performance.now() - startTimeRef.current;
-    console.log(`DashboardPage initial render took ${renderDuration.toFixed(2)} ms`);
-  }, []);
-  useEffect(() => {
-    if (!isLoading) {
-      const loadDuration = performance.now() - startTimeRef.current;
-      console.log(`DashboardPage data load took ${loadDuration.toFixed(2)} ms`);
-    }
-  }, [isLoading]);
   
   // Cast the user to our extended type
   const user = session?.user as ExtendedUser | undefined;
@@ -81,65 +70,53 @@ export default function DashboardPage() {
   // Use server-provided brand coverage when unfiltered
   const coverageByBrandData = !isLoading ? brandCoverage : []
 
-  // Get availability by brand data for dashboard
+  // Get availability by brand data for dashboard (from summary)
   const availabilityByBrandData = useMemo(() => {
     if (isLoading) return [];
-    return [...brandData]
-      .map(item => ({ name: item.name, availability: item.availability }))
-      .sort((a, b) => b.availability - a.availability);
-  }, [brandData, isLoading]);
+    return summaryAvailabilityByBrand.sort((a, b) => b.availability - a.availability);
+  }, [summaryAvailabilityByBrand, isLoading]);
 
-  // Compute average MRP and Selling Price per product for the bar chart
+  // Compute average MRP and Selling Price per product from summary data
   const avgPriceByProductData = useMemo(() => {
     if (isLoading) return [];
-    const nameMap = new Map<string, string>();
     const map = new Map<string, { totalMrp: number; totalSp: number; count: number }>();
-    filteredData.forEach(item => {
-      const rawName = item.productDescription;
-      const cleanedName = rawName.replace(/\s*\(.*\)/, '');
-      const name = cleanedName.length > 20 ? `${cleanedName.slice(0, 20)}...` : cleanedName;
-      nameMap.set(name, cleanedName);
-      const mrp = item.mrp;
-      const sp = item.sellingPrice;
-      if (!map.has(name)) {
-        map.set(name, { totalMrp: 0, totalSp: 0, count: 0 });
-      }
-      const entry = map.get(name)!;
-      entry.totalMrp += mrp;
-      entry.totalSp += sp;
+    normalizedSummaryData.forEach(item => {
+      const key = item.productDescription;
+      if (!map.has(key)) map.set(key, { totalMrp: 0, totalSp: 0, count: 0 });
+      const entry = map.get(key)!;
+      entry.totalMrp += item.mrp;
+      entry.totalSp += item.sellingPrice;
       entry.count += 1;
     });
-    return Array.from(map.entries()).map(([name, { totalMrp, totalSp, count }]) => {
-      const avgMrp = parseFloat((totalMrp / count).toFixed(2));
-      const avgSp = parseFloat((totalSp / count).toFixed(2));
-      return { name, fullName: nameMap.get(name) || name, avgMrp, avgSp };
-    });
-  }, [filteredData, isLoading]);
+    return Array.from(map.entries())
+      .map(([name, { totalMrp, totalSp, count }]) => ({
+        name,
+        fullName: name,
+        avgMrp: parseFloat((totalMrp / count).toFixed(2)),
+        avgSp: parseFloat((totalSp / count).toFixed(2)),
+      }))
+      .sort((a, b) => b.avgMrp - a.avgMrp);
+  }, [normalizedSummaryData, isLoading]);
 
-  // Compute average discount per product for Discount chart
+  // Compute average discount per product from summary data
   const avgDiscountByProductData = useMemo(() => {
     if (isLoading) return [];
-    const nameMap2 = new Map<string, string>();
     const map = new Map<string, { totalDiscount: number; count: number }>();
-    filteredData.forEach(item => {
-      const rawName = item.productDescription;
-      const cleanedName = rawName.replace(/\s*\(.*\)/, '');
-      const name = cleanedName.length > 20 ? `${cleanedName.slice(0, 20)}...` : cleanedName;
-      nameMap2.set(name, cleanedName);
-      const discount = item.discount;
-      if (!map.has(name)) {
-        map.set(name, { totalDiscount: 0, count: 0 });
-      }
-      const entry = map.get(name)!;
-      entry.totalDiscount += discount;
+    normalizedSummaryData.forEach(item => {
+      const key = item.productDescription;
+      if (!map.has(key)) map.set(key, { totalDiscount: 0, count: 0 });
+      const entry = map.get(key)!;
+      entry.totalDiscount += item.discount;
       entry.count += 1;
     });
-    return Array.from(map.entries()).map(([name, { totalDiscount, count }]) => ({
-      name,
-      fullName: nameMap2.get(name) || name,
-      avgDiscount: parseFloat((totalDiscount / count).toFixed(1)),
-    }));
-  }, [filteredData, isLoading]);
+    return Array.from(map.entries())
+      .map(([name, { totalDiscount, count }]) => ({
+        name,
+        fullName: name,
+        avgDiscount: parseFloat((totalDiscount / count).toFixed(1)),
+      }))
+      .sort((a, b) => b.avgDiscount - a.avgDiscount);
+  }, [normalizedSummaryData, isLoading]);
 
   // Last updated time
   const lastUpdated = format(new Date(), "h:mm a")
@@ -279,28 +256,56 @@ export default function DashboardPage() {
             <CardDescription>Percentage of pincodes covered for each brand</CardDescription>
           </CardHeader>
           <CardContent className="h-[350px]">
-            {isLoading ? (
-              <Skeleton className="h-full w-full" />
-            ) : (
-              coverageByBrandData && coverageByBrandData.length > 0 ? (
-                <BarChart
-                  data={coverageByBrandData}
-                  categories={["coverage"]}
-                  index="name"
-                  colors={["#8b5cf6"]}
-                  valueFormatter={(value: number) => `${value}%`}
-                  showLegend={false}
-                  showGridLines={true}
-                  className="h-full w-full"
-                  xAxisLabel="Brand"
-                  yAxisLabel="Coverage %"
-                />
+            <div className="h-full w-full overflow-auto">
+              {isLoading ? (
+                <Skeleton className="h-full w-full" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <p className="text-muted-foreground">No brand coverage data available</p>
-                </div>
-              )
-            )}
+                coverageByBrandData && coverageByBrandData.length > 0 ? (
+                  coverageByBrandData.length > 1 ? (
+                    // Multiple brands: use scrollable custom BarChart
+                  <div style={{ width: coverageByBrandData.length * 120 }} className="h-full">
+                    <BarChart
+                      data={coverageByBrandData}
+                      categories={["coverage"]}
+                      index="name"
+                      colors={["#8b5cf6"]}
+                      valueFormatter={(value: number) => `${value}%`}
+                      showLegend={false}
+                      showGridLines={true}
+                      className="h-full w-full"
+                      xAxisLabel="Brand"
+                      yAxisLabel="Coverage %"
+                    />
+                  </div>
+                  ) : (
+                    // Single brand: full width chart with labels
+                    <div className="h-full w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ReBarChart data={coverageByBrandData} margin={{ top: 20, right: 30, left: 0, bottom: 30 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="name" tick={{ fontSize: 12 }} tickLine={{ stroke: '#888' }} axisLine={{ stroke: '#888' }} />
+                          <YAxis
+                            tickFormatter={(value: number) => `${value}%`}
+                            tick={{ fontSize: 12 }}
+                            tickLine={{ stroke: '#888' }}
+                            axisLine={{ stroke: '#888' }}
+                            width={60}
+                          />
+                          <Tooltip formatter={(value: number) => `${value}%`} />
+                          <Bar dataKey="coverage" fill="#8b5cf6">
+                            <LabelList dataKey="coverage" position="top" formatter={(value: number) => `${value}%`} />
+                          </Bar>
+                        </ReBarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <p className="text-muted-foreground">No brand coverage data available</p>
+                  </div>
+                )
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -310,42 +315,63 @@ export default function DashboardPage() {
             <CardDescription>Percentage of products available for each brand</CardDescription>
           </CardHeader>
           <CardContent className="h-[350px]">
-            {isLoading ? (
-              <Skeleton className="h-full w-full" />
-            ) : availabilityByBrandData && availabilityByBrandData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <ReBarChart
-                  layout="vertical"
-                  data={availabilityByBrandData}
-                  margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} vertical={true} />
-                  <XAxis
-                    type="number"
-                    tickFormatter={(value: number) => `${value}%`}
-                    tick={{ fontSize: 12 }}
-                    tickLine={{ stroke: "#888" }}
-                    axisLine={{ stroke: "#888" }}
-                  />
-                  <YAxis
-                    dataKey="name"
-                    type="category"
-                    width={60}
-                    tick={{ fontSize: 12 }}
-                    tickLine={{ stroke: "#888" }}
-                    axisLine={{ stroke: "#888" }}
-                  />
-                  <Tooltip formatter={(value: number) => `${value}%`} />
-                  <Bar dataKey="availability" fill="#10B981" barSize={20}>
-                    <LabelList dataKey="availability" position="right" formatter={(value: number) => `${value}%`} />
-                  </Bar>
-                </ReBarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <p className="text-muted-foreground">No availability data available</p>
-              </div>
-            )}
+            <div className="h-full w-full overflow-auto">
+              {isLoading ? (
+                <Skeleton className="h-full w-full" />
+              ) : availabilityByBrandData && availabilityByBrandData.length > 0 ? (
+                availabilityByBrandData.length > 1 ? (
+                <div style={{ height: availabilityByBrandData.length * 60 }} className="w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ReBarChart
+                      layout="vertical"
+                      data={availabilityByBrandData}
+                      margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} vertical={true} />
+                      <XAxis
+                        type="number"
+                        tickFormatter={(value: number) => `${value}%`}
+                        tick={{ fontSize: 12 }}
+                        tickLine={{ stroke: "#888" }}
+                        axisLine={{ stroke: "#888" }}
+                      />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        width={150}
+                        tick={{ fontSize: 12 }}
+                        tickLine={{ stroke: "#888" }}
+                        axisLine={{ stroke: "#888" }}
+                      />
+                      <Tooltip formatter={(value: number) => `${value}%`} />
+                      <Bar dataKey="availability" fill="#10B981" barSize={30}>
+                        <LabelList dataKey="availability" position="right" formatter={(value: number) => `${value}%`} />
+                      </Bar>
+                    </ReBarChart>
+                  </ResponsiveContainer>
+                </div>
+                ) : (
+                  <div className="h-full w-full">
+                    <BarChart
+                      data={availabilityByBrandData}
+                      categories={["availability"]}
+                      index="name"
+                      colors={["#10B981"]}
+                      valueFormatter={(value: number) => `${value}%`}
+                      showLegend={false}
+                      showGridLines={true}
+                      className="h-full w-full"
+                      xAxisLabel="Brand"
+                      yAxisLabel="Availability %"
+                    />
+                  </div>
+                )
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <p className="text-muted-foreground">No availability data available</p>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -357,13 +383,12 @@ export default function DashboardPage() {
             <CardTitle>Average Product Prices</CardTitle>
             <CardDescription>Average MRP and Selling Price for each product</CardDescription>
           </CardHeader>
-          <CardContent className="h-[400px] overflow-x-scroll overflow-y-hidden">
+          <CardContent className="h-[400px] overflow-auto">
             {isLoading ? (
               <Skeleton className="h-full w-full" />
             ) : avgPriceByProductData && avgPriceByProductData.length > 0 ? (
               <div style={{ width: '100%', minWidth: avgPriceByProductData.length * 200 }} className="h-full">
                 <BarChart
-                  // data={avgPriceByProductData}
                   data={avgPriceByProductData.map(item => ({
                     ...item,
                     "Avg. MRP": item.avgMrp,
@@ -378,9 +403,10 @@ export default function DashboardPage() {
                   className="h-full w-full"
                   xAxisLabel="Product"
                   yAxisLabel="Price"
+                  xAxisProps={{ interval: 0, angle: -45, textAnchor: 'end' }}
                   labelFormatter={(label) => {
                     const item = avgPriceByProductData.find(d => d.name === label);
-                    return item?.fullName || label;
+                    return item?.name || label;
                   }}
                 />
               </div>
@@ -396,7 +422,7 @@ export default function DashboardPage() {
             <CardTitle>Average Discount for each Product</CardTitle>
             <CardDescription>Average Discount % for each product</CardDescription>
           </CardHeader>
-          <CardContent className="h-[400px] overflow-x-scroll overflow-y-hidden">
+          <CardContent className="h-[400px] overflow-auto">
             {isLoading ? (
               <Skeleton className="h-full w-full" />
             ) : avgDiscountByProductData && avgDiscountByProductData.length > 0 ? (
@@ -415,7 +441,7 @@ export default function DashboardPage() {
                   xAxisProps={{ interval: 0, angle: -45, textAnchor: 'end' }}
                   labelFormatter={(label) => {
                     const item = avgDiscountByProductData.find(d => d.name === label);
-                    return item?.fullName || label;
+                    return item?.name || label;
                   }}
                 />
               </div>
@@ -428,11 +454,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <KeyInsights
-        kpis={serverKpis as any}
-        lowestCoveragePlatform={lowestCoveragePlatform}
-        lowestAvailabilityPlatform={lowestAvailabilityPlatform}
-      />
+      <KeyInsights />
 
       {/* Navigation cards */}
       <div className="grid gap-4 md:grid-cols-3">

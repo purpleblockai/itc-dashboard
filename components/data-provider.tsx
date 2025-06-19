@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from "react"
 import { useSession } from "next-auth/react"
 import {
-  fetchCompetitionData,
+  fetchSummaryData,
+  fetchRawData,
   type ProcessedData,
   calculateKPIs,
   getTimeSeriesData,
@@ -20,7 +21,10 @@ import {
   DashboardPayload,
 } from "@/lib/data-service"
 import { useFilters } from "./filters/filter-provider"
-import { parseISO } from 'date-fns'
+import { parseISO, parse, format } from 'date-fns'
+
+// Keep track of last fetched filters globally to avoid duplicate fetches
+let lastFetchedFiltersKey = "";
 
 // Define extended user type to include role and clientName
 interface ExtendedUser {
@@ -35,6 +39,8 @@ interface DataContextType {
   isLoading: boolean
   error: Error | null
   rawData: ProcessedData[]
+  normalizedSummaryData: any[]
+  unfilteredSummaryData: any[]
   filteredData: ProcessedData[]
   kpis: {
     skusTracked: number
@@ -116,6 +122,8 @@ interface DataContextType {
   }[]
   // Coverage by brand for dashboard
   brandCoverage: { name: string; coverage: number }[]
+  summaryAvailabilityByBrand: { name: string; availability: number }[]
+  summaryPenetrationByBrand: { name: string; penetration: number }[]
   productData: {
     brand: string
     name: string
@@ -193,15 +201,21 @@ interface DataContextType {
       delta: number
     }
   }
+  summaryPlatformMetrics: { name: string; availability: number; penetration: number; discount: number }[]
+  pauseSummary: boolean
+  setPauseSummary: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined)
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [rawData, setRawData] = useState<ProcessedData[]>([])
+  const [summaryData, setSummaryData] = useState<ProcessedData[]>([])
   const [serverDashboard, setServerDashboard] = useState<DashboardPayload | null>(null)
+  const [unfilteredSummaryData, setUnfilteredSummaryData] = useState<any[]>([])
+  const [pauseSummary, setPauseSummary] = useState(false)
   const { filters } = useFilters()
   const { data: session } = useSession()
   
@@ -243,7 +257,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Filter by product
-      if (filters.product.length > 0 && !filters.product.includes(item.productId)) {
+      if (filters.product.length > 0 && !filters.product.includes(item.productDescription)) {
         return false
       }
 
@@ -307,11 +321,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     })
   }, [rawData, isAdmin, userClientName])
 
-  // Use server-provided or client-computed aggregates
+  // Compute client-side KPIs for filtered data (unique SKUs count)
+  const clientKPIs = React.useMemo(() => calculateKPIs(filteredData), [filteredData])
+
+  // Use server-provided or client-computed aggregates; trust server skusTracked
   const kpis = React.useMemo(() => {
-    if (serverDashboard && noFilters) return serverDashboard.kpis;
-    return calculateKPIs(filteredData);
-  }, [serverDashboard, filteredData, noFilters]);
+    return serverDashboard ? serverDashboard.kpis : clientKPIs;
+  }, [serverDashboard, clientKPIs])
 
   // Always get server-side KPIs (full data) for Key Insights
   const serverKpis = React.useMemo(() => {
@@ -320,24 +336,200 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Calculate other metrics using filtered data
   const timeSeriesData = React.useMemo(() => {
-    if (serverDashboard && noFilters) return serverDashboard.timeSeriesData;
+    if (serverDashboard) return serverDashboard.timeSeriesData;
     return getTimeSeriesData(filteredData);
-  }, [serverDashboard, filteredData, noFilters]);
+  }, [serverDashboard, filteredData]);
   const regionalData = React.useMemo(() => {
-    if (serverDashboard && noFilters) return serverDashboard.regionalData;
+    if (serverDashboard) return serverDashboard.regionalData;
     return getRegionalData(filteredData);
-  }, [serverDashboard, filteredData, noFilters]);
-  const cityRegionalData = React.useMemo(() => getCityRegionalData(filteredData), [filteredData])
+  }, [serverDashboard, filteredData]);
+  const cityRegionalData = React.useMemo(() => {
+    // Use summary data directly for city regional data calculation
+    if (!summaryData || summaryData.length === 0) {
+      return [];
+    }
+    
+    // Group summary data by city and calculate metrics
+    const cityMap = new Map<string, { available: number; listed: number; total: number; pincodes: Set<string> }>();
+    
+    summaryData.forEach((doc: any, index: number) => {
+      const city = (doc.City || doc.city || "").toString().toLowerCase().trim();
+      const pincode = String(doc.Pincode || doc.pincode || "").trim();
+      
+
+      
+      if (!city || city === 'undefined' || city === 'null' || city.length === 0) {
+        return;
+      }
+      
+      const available = Number(doc.availableCount ?? doc.available_count ?? 0);
+      const listed = Number(doc.listedCount ?? doc.listed_count ?? 0);
+      const total = Number(doc.totalCount ?? doc.total_count ?? 0);
+      
+      if (!cityMap.has(city)) {
+        cityMap.set(city, { available: 0, listed: 0, total: 0, pincodes: new Set() });
+      }
+      
+      const entry = cityMap.get(city)!;
+      entry.available += available;
+      entry.listed += listed;
+      entry.total += total;
+      
+      if (pincode && pincode !== 'undefined' && pincode !== 'null' && pincode.length > 0) {
+        entry.pincodes.add(pincode);
+      }
+    });
+    
+
+    
+    // Convert to final format
+    const result = Array.from(cityMap.entries())
+      .filter(([city]) => city && city.length > 0)
+      .map(([city, { available, listed, total, pincodes }]) => {
+        const stockAvailability = listed > 0 ? Math.round((available / listed) * 100) : 0;
+        const stockOutPercent = listed > 0 ? Math.round(((listed - available) / listed) * 100) : 0;
+        const penetration = total > 0 ? Math.round((listed / total) * 100) : 0;
+        const coverage = total > 0 ? Math.round((available / total) * 100) : 0;
+        
+        return {
+          city,
+          stockAvailability,
+          stockOutPercent,
+          pincodeCount: pincodes.size,
+          pincodes: Array.from(pincodes),
+          coverage,
+          penetration,
+        };
+      })
+      .sort((a, b) => b.stockAvailability - a.stockAvailability);
+    
+
+    return result;
+  }, [summaryData])
   const platformData = React.useMemo(() => getPlatformData(filteredData), [filteredData])
   const platformShareData = React.useMemo(() => {
-    if (serverDashboard && noFilters) return serverDashboard.platformShareData;
+    if (serverDashboard) return serverDashboard.platformShareData;
     return getPlatformShareData(
       filteredData,
       filters.brand.length === 1 ? filters.brand[0] : undefined
     );
   }, [serverDashboard, filteredData, filters, noFilters]);
-  const brandData = React.useMemo(() => getBrandData(filteredData), [filteredData])
-  const productData = React.useMemo(() => getProductData(filteredData), [filteredData])
+
+  // Normalize summaryData field names for chart hooks
+  const normalizedSummaryData = React.useMemo(
+    () => summaryData.map(item => {
+      const doc = item as any;
+      // Parse and normalize report date from summary data
+      let reportDate: Date;
+      if (doc.Report_Date instanceof Date) {
+        reportDate = doc.Report_Date;
+      } else if (typeof doc.Report_Date === 'string') {
+        // Summary stores dates as 'DD-MM-YYYY'
+        reportDate = parse(doc.Report_Date, 'dd-MM-yyyy', new Date());
+      } else {
+        reportDate = new Date(doc.Report_Date);
+      }
+      const available = doc.availableCount ?? doc.available_count ?? 0;
+      const listed = doc.listedCount ?? doc.listed_count ?? 0;
+      const total = doc.totalCount ?? doc.total_count ?? 0;
+      const availability = listed > 0 ? available / listed : 0;
+      const penetration = total > 0 ? listed / total : 0;
+      const coverage = listed > 0 ? available / listed : 0;
+      return {
+        ...item,
+        reportDate,
+        brand: doc.Brand || doc.brand,
+        name: doc.Name || doc.name,
+        company: doc.Company || doc.company,
+        productDescription: doc.Name || doc.productDescription,
+        city: doc.City || doc.city,
+        platform: doc.Platform || doc.platform,
+        category: doc.Category || doc.category,
+        uniqueProductId: doc.Unique_Product_ID || doc.uniqueProductId,
+        availability,
+        penetration,
+        coverage,
+        discount: doc.Discount ?? doc.discount ?? 0,
+        mrp: doc.MRP ?? doc.mrp ?? 0,
+        sellingPrice: doc.Selling_Price ?? doc.sellingPrice ?? 0,
+      };
+    }),
+    [summaryData]
+  );
+
+  const brandData = React.useMemo(() => getBrandData((normalizedSummaryData as unknown) as ProcessedData[]), [normalizedSummaryData])
+  const productData = React.useMemo(() => getProductData((normalizedSummaryData as unknown) as ProcessedData[]), [normalizedSummaryData])
+  const brandCoverage = React.useMemo(() => {
+    // Always prefer server-computed brand coverage if present (reflects current filters)
+    if (serverDashboard) {
+      return serverDashboard.brandCoverage;
+    }
+    // Fallback: compute coverage from summary data
+    return getCoverageByBrandData((normalizedSummaryData as unknown) as ProcessedData[]);
+  }, [serverDashboard, normalizedSummaryData]);
+  
+  // Compute availability by brand from summary counts
+  const summaryAvailabilityByBrand = React.useMemo(() => {
+    const map = new Map<string, { available: number; listed: number }>();
+    summaryData.forEach((doc: any) => {
+      const brand = doc.Brand || doc.brand;
+      const available = doc.availableCount ?? doc.available_count ?? 0;
+      const listed = doc.listedCount ?? doc.listed_count ?? 0;
+      const entry = map.get(brand) || { available: 0, listed: 0 };
+      entry.available += available;
+      entry.listed += listed;
+      map.set(brand, entry);
+    });
+    return Array.from(map.entries()).map(([name, { available, listed }]) => ({
+      name,
+      availability: listed > 0 ? parseFloat(((available / listed) * 100).toFixed(1)) : 0,
+    }));
+  }, [summaryData]);
+  
+  // Compute penetration by brand from summary counts
+  const summaryPenetrationByBrand = React.useMemo(() => {
+    const map = new Map<string, { listed: number; total: number }>();
+    summaryData.forEach((doc: any) => {
+      const brand = doc.Brand || doc.brand;
+      const listed = doc.listedCount ?? doc.listed_count ?? 0;
+      const total = doc.totalCount ?? doc.total_count ?? 0;
+      const entry = map.get(brand) || { listed: 0, total: 0 };
+      entry.listed += listed;
+      entry.total += total;
+      map.set(brand, entry);
+    });
+    return Array.from(map.entries()).map(([name, { listed, total }]) => ({
+      name,
+      penetration: total > 0 ? parseFloat(((listed / total) * 100).toFixed(1)) : 0,
+    }));
+  }, [summaryData]);
+
+  // Compute platform-level metrics from summary data
+  const summaryPlatformMetrics = React.useMemo(() => {
+    const map = new Map<string, { available: number; listed: number; total: number; discount: number; count: number }>();
+    summaryData.forEach((doc: any) => {
+      const platform = doc.Platform || doc.platform;
+      if (!platform) return;
+      const available = doc.availableCount ?? doc.available_count ?? 0;
+      const listed = doc.listedCount ?? doc.listed_count ?? 0;
+      const total = doc.totalCount ?? doc.total_count ?? 0;
+      const discount = doc.Discount ?? doc.discount ?? 0;
+      const entry = map.get(platform) || { available: 0, listed: 0, total: 0, discount: 0, count: 0 };
+      entry.available += available;
+      entry.listed += listed;
+      entry.total += total;
+      entry.discount += discount;
+      entry.count += 1;
+      map.set(platform, entry);
+    });
+    return Array.from(map.entries()).map(([name, { available, listed, total, discount, count }]) => ({
+      name,
+      availability: listed > 0 ? parseFloat(((available / listed) * 100).toFixed(1)) : 0,
+      penetration: total > 0 ? parseFloat(((listed / total) * 100).toFixed(1)) : 0,
+      discount: count > 0 ? parseFloat((discount / count).toFixed(1)) : 0,
+    }));
+  }, [summaryData]);
+
   const choroplethData = React.useMemo(() => getChoroplethData(filteredData), [filteredData])
   const cityChoroplethData = React.useMemo(() => getCityChoroplethData(filteredData), [filteredData])
   const coverageChoroplethData = React.useMemo(() => 
@@ -367,44 +559,131 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [filteredData, cityRegionalData]
   )
 
-  // Coverage by brand data (server or client)
-  const brandCoverage = React.useMemo(() => {
-    if (serverDashboard && noFilters) return serverDashboard.brandCoverage;
-    return getCoverageByBrandData(filteredData);
-  }, [serverDashboard, filteredData, noFilters]);
+  // Create stable serverFilters object to prevent unnecessary re-fetches
+  const serverFiltersRef = useRef<any>(null);
+  const serverFilters = React.useMemo(() => {
+    const newFilters = {
+      brand: filters.brand.length > 0 ? filters.brand : undefined,
+      company: filters.company.length > 0 ? filters.company : undefined,
+      product: filters.product.length > 0 ? filters.product : undefined,
+      city: filters.city.length > 0 ? filters.city : undefined,
+      platform: filters.platform.length > 0 ? filters.platform : undefined,
+      pincode: filters.pincode || undefined,
+      from: filters.dateRange.from ? format(filters.dateRange.from, 'dd-MM-yyyy') : undefined,
+      to: filters.dateRange.to ? format(filters.dateRange.to, 'dd-MM-yyyy') : undefined,
+    };
+    
+    // Deep comparison to avoid unnecessary re-renders
+    const hasChanged = !serverFiltersRef.current || 
+      JSON.stringify(serverFiltersRef.current) !== JSON.stringify(newFilters);
+    
+    if (hasChanged) {
+      serverFiltersRef.current = newFilters;
+      return newFilters;
+    }
+    
+    return serverFiltersRef.current;
+  }, [
+    filters.brand.join(','), 
+    filters.company.join(','), 
+    filters.product.join(','), 
+    filters.city.join(','), 
+    filters.platform.join(','), 
+    filters.pincode, 
+    filters.dateRange.from?.getTime(), 
+    filters.dateRange.to?.getTime()
+  ]);
 
-  // Fetch data on component mount
+  // Fetch summary (pre-aggregated) data
+  const fetchingRef = useRef(false);
   const fetchData = async () => {
-    const payloadStart = performance.now();
+    // Dedupe identical fetches across remounts by checking filter key
+    const currentFiltersKey = JSON.stringify(serverFilters);
+    if (currentFiltersKey === lastFetchedFiltersKey) {
+      return;
+    }
+    lastFetchedFiltersKey = currentFiltersKey;
+    if (fetchingRef.current) {
+      return;
+    }
+    
+    fetchingRef.current = true;
+    setIsLoading(true);
+    
     try {
-      setIsLoading(true)
-      const payload = await fetchCompetitionData()        // DashboardPayload
-      setServerDashboard(payload)
-      const parsed = payload.rawData.map(r => ({
-        ...r,
-        // parse 'YYYY-MM-DD' string into local Date to avoid timezone shifts, fallback to now if missing
-        reportDate: typeof r.reportDate === 'string' && r.reportDate
-          ? parseISO(r.reportDate)
-          : new Date()
-      }))
-      setRawData(parsed)
-      setError(null)
+      const payload: DashboardPayload & { summaryData?: ProcessedData[] } = await fetchSummaryData(serverFilters);
+      // Log summary calculation: numerator and denominator for KPIs
+      const docs: any[] = (payload as any).summaryData || [];
+      const sumTotal = docs.reduce((a, d) => a + (d.totalCount ?? d.total_count ?? 0), 0);
+      const sumListed = docs.reduce((a, d) => a + (d.listedCount ?? d.listed_count ?? 0), 0);
+      const sumAvailable = docs.reduce((a, d) => a + (d.availableCount ?? d.available_count ?? 0), 0);
+      setServerDashboard(payload);
+      setSummaryData(docs);
+      setRawData(payload.rawData || []);
+      // Only set unfiltered data if this is the first fetch (no filters applied)
+      const hasFilters = Object.values(serverFilters).some(value => 
+        Array.isArray(value) ? value.length > 0 : value !== undefined
+      );
+      if (!hasFilters && unfilteredSummaryData.length === 0) {
+        setUnfilteredSummaryData(docs);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err : new Error("Unknown error occurred"))
+      setError(err instanceof Error ? err : new Error("Unknown error occurred"));
     } finally {
-      setIsLoading(false)
-      const duration = performance.now() - payloadStart;
-      console.log(`DataProvider.fetchData took ${duration.toFixed(2)} ms`);
+      setIsLoading(false);
+      fetchingRef.current = false;
     }
   }
 
-  // Prevent double-fetch in React StrictMode by guarding the initial fetch
-  const hasFetchedRef = useRef(false)
+  // Fetch unfiltered summary data once on mount for filters and key insights
   useEffect(() => {
-    if (hasFetchedRef.current) return
-    hasFetchedRef.current = true
-    fetchData()
-  }, [])
+    const fetchUnfilteredData = async () => {
+      if (unfilteredSummaryData.length > 0) return; // Already cached
+      
+      try {
+        const payload = await fetchSummaryData({}); // No filters
+        const docs = (payload as any).summaryData || [];
+        setUnfilteredSummaryData(docs);
+      } catch (err) {
+        console.error('Error fetching unfiltered summary data:', err);
+      }
+    };
+    
+    fetchUnfilteredData();
+  }, []); // Only run once on mount
+
+  // Only fetch on first mount or when server-side filters are applied
+  const didMountRef = useRef(false)
+  
+  useEffect(() => {
+    if (pauseSummary) return; // Skip summary fetch when paused
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      fetchData()
+    } else {
+      // Refetch summary data whenever any serverFilters value changes
+      fetchData()
+    }
+  }, [serverFilters, pauseSummary])
+
+  // Fetch raw detail data when a pincode is selected
+  useEffect(() => {
+    if (filters.pincode) {
+      fetchRawData({ pincode: filters.pincode, from: serverFilters.from, to: serverFilters.to })
+        .then(res => {
+          setRawData(res.rawData.map(r => ({
+            ...r,
+            reportDate: typeof r.reportDate === 'string' && r.reportDate
+              ? parseISO(r.reportDate)
+              : new Date()
+          })));
+        })
+        .catch(err => setError(err instanceof Error ? err : new Error(String(err))));
+    }
+  }, [filters.pincode, serverFilters.from, serverFilters.to]);
+
+  // Raw data fetching for city drill-down is now handled individually by pages that need it
+  // (e.g., Regional Analysis page) rather than globally in the data provider
 
   useEffect(() => {
     if (!isLoading && rawData.length > 0) {
@@ -479,6 +758,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         error,
         rawData,
+        normalizedSummaryData,
+        unfilteredSummaryData,
         filteredData,
         kpis,
         serverKpis,
@@ -489,6 +770,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         platformShareData,
         brandData,
         brandCoverage,
+        summaryAvailabilityByBrand,
+        summaryPenetrationByBrand,
         productData,
         choroplethData,
         cityChoroplethData,
@@ -496,7 +779,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         penetrationChoroplethData,
         lowestCoveragePlatform,
         lowestAvailabilityPlatform,
-        refreshData
+        refreshData,
+        summaryPlatformMetrics,
+        pauseSummary,
+        setPauseSummary,
       }}
     >
       {children}

@@ -20,6 +20,8 @@ function parseReportDate(rawDate) {
 }
 
 export async function GET(request) {
+  const requestStart = Date.now();
+
   try {
     // Get the authenticated session
     const session = await getServerSession(authOptions);
@@ -47,20 +49,39 @@ export async function GET(request) {
     } else {
     }
     
-    // Fetch rawData separately to avoid $facet memory limits
+    // NEW: parse filter params from the URL and extend `query`
+    const { searchParams } = new URL(request.url);
+    const parseList = key => {
+      const param = searchParams.get(key);
+      return param ? param.split(',') : [];
+    };
+    const brands = parseList('brand');
+    const companies = parseList('company');
+    const products = parseList('product');
+    const cities = parseList('city');
+    const platforms = parseList('platform');
+    const pincodeParam = searchParams.get('pincode');
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+    if (brands.length) query.Brand = { $in: brands };
+    if (companies.length) query.Company = { $in: companies };
+    if (products.length) query.Name = { $in: products };
+    if (cities.length) query.City = { $in: cities };
+    if (platforms.length) query.Platform = { $in: platforms };
+    if (pincodeParam) query.Pincode = parseInt(pincodeParam, 10);
+
+    // NEW: build dateMatch for optional date-range filtering
+    const dateMatch = {};
+    if (fromParam) dateMatch.$gte = parseReportDate(fromParam);
+    if (toParam) dateMatch.$lte = parseReportDate(toParam);
+
+    // Build combined match stage for compound index usage
+    const matchStage = { ...query, ...(fromParam || toParam ? { reportDateParsed: dateMatch } : {}) };
+
+    // Optimized rawDataPipeline using compound index and sorting
     const rawDataPipeline = [
-      { $match: query },
-      { $addFields: { Report_Date: { $ifNull: ["$Report_Date", "$Report Date"] } } },
-      { $addFields: {
-        reportDateParsed: {
-          $ifNull: [
-            { $dateFromString: { dateString: '$Report_Date', format: '%d-%m-%Y', onError: null, onNull: null } },
-            { $dateFromString: { dateString: '$Report_Date', onError: null, onNull: null } }
-          ]
-        },
-        availabilityFlag: { $cond: [ { $in: ['$Availability', ['Yes', 'No']] }, 1, 0 ] },
-        availableFlag:    { $cond: [ { $eq: ['$Availability', 'Yes'] }, 1, 0 ] }
-      }},
+      { $match: matchStage },
+      { $sort: { reportDateParsed: -1 } },
       { $project: {
         id:               { $toString: '$_id' },
         reportDate:       { $dateToString: { format: '%Y-%m-%d', date: '$reportDateParsed' } },
@@ -78,27 +99,19 @@ export async function GET(request) {
         availability:     '$Availability',
         discount:         { $toDouble: '$Discount' },
         isListed:         '$availabilityFlag',
-        stockAvailable:   '$availableFlag',
-      }}
+        stockAvailable:   '$availableFlag'
+      } }
     ];
     const rawData = await db.collection('products')
-      .aggregate(rawDataPipeline, { allowDiskUse: true })
+      .aggregate(rawDataPipeline, {
+        allowDiskUse: true,
+        hint: { Client_Name: 1, Category: 1, Brand: 1, Company: 1, Name: 1, City: 1, Platform: 1, Pincode: 1, reportDateParsed: -1 }
+      })
       .toArray();
 
-    // Compute aggregated metrics in a separate facet (no rawData)
+    // Optimized metricsPipeline using compound index
     const metricsPipeline = [
-      { $match: query },
-      { $addFields: { Report_Date: { $ifNull: ["$Report_Date", "$Report Date"] } } },
-      { $addFields: {
-        reportDateParsed: {
-          $ifNull: [
-            { $dateFromString: { dateString: '$Report_Date', format: '%d-%m-%Y', onError: null, onNull: null } },
-            { $dateFromString: { dateString: '$Report_Date', onError: null, onNull: null } }
-          ]
-        },
-        availabilityFlag: { $cond: [ { $in: ['$Availability', ['Yes', 'No']] }, 1, 0 ] },
-        availableFlag:    { $cond: [ { $eq: ['$Availability', 'Yes'] }, 1, 0 ] }
-      }},
+      { $match: matchStage },
       { $facet: {
         kpis: [
           { $group: {
@@ -224,7 +237,10 @@ export async function GET(request) {
       }}
     ];
     const [metricsResult] = await db.collection('products')
-      .aggregate(metricsPipeline, { allowDiskUse: true })
+      .aggregate(metricsPipeline, {
+        allowDiskUse: true,
+        hint: { Client_Name: 1, Category: 1, Brand: 1, Company: 1, Name: 1, City: 1, Platform: 1, Pincode: 1, reportDateParsed: -1 }
+      })
       .toArray();
     const {
       timeSeriesData      = [],
@@ -235,6 +251,9 @@ export async function GET(request) {
 
     // Compute full KPIs on the fetched rawData
     const fullKpis = calculateKPIs(rawData);
+    // Log completion time and duration
+    const apiDuration = Date.now() - requestStart;
+
     return NextResponse.json({
       rawData,
       kpis: fullKpis,

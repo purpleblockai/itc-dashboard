@@ -42,15 +42,23 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
   }
 
   useEffect(() => {
-    if (!svgRef.current || !data.length) return
+    
+    if (!svgRef.current || !data.length) {
+      return;
+    }
 
     // Clear previous content
     d3.select(svgRef.current).selectAll("*").remove()
 
     const svg = d3.select(svgRef.current)
-    const width = svgRef.current.clientWidth
+    const width = svgRef.current.clientWidth || 800 // Fallback width if clientWidth is 0
     const margin = { top: 20, right: 20, bottom: 90, left: 40 } // Increased bottom margin from 70 to 90
     const innerWidth = width - margin.left - margin.right
+    
+    if (width <= 0 || innerWidth <= 0) {
+      console.error('Invalid SVG dimensions - width is 0 or negative');
+      return;
+    }
     
     // Calculate grid dimensions based on data
     const numCols = Math.min(Math.ceil(Math.sqrt(data.length * 1.5)), 12) // Wider grid for better readability
@@ -392,6 +400,11 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
     // Handle tooltip events on cells
     g.selectAll("g.cell")
       .on("mousemove", function(event, d: any) {
+        // Guard against undefined data
+        if (!d) {
+          tooltip.style("visibility", "hidden");
+          return;
+        }
         const data = d as ChoroplethData;
         tooltip
           .style("visibility", "visible")
@@ -417,7 +430,7 @@ export function ChoroplethMap({ data, height = 400, onCellClick, heatmapType = "
 
   return (
     <div ref={containerRef} className="w-full h-full overflow-auto">
-      <svg ref={svgRef} width="100%" />
+      <svg ref={svgRef} width="100%" height={height} style={{ minWidth: '800px' }} />
     </div>
   )
 }

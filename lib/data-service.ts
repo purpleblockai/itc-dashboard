@@ -49,26 +49,39 @@ export interface DashboardPayload {
   brandCoverage: ReturnType<typeof getCoverageByBrandData>;
 }
 
-// Function to fetch dashboard data (raw + aggregates)
-export async function fetchCompetitionData(): Promise<DashboardPayload> {
+// Parameters for server-side filtering
+export interface FetchFilters {
+  brand?: string[];
+  company?: string[];
+  product?: string[];
+  city?: string[];
+  platform?: string[];
+  pincode?: string;
+  from?: string;  // in 'dd-MM-yyyy' or ISO format
+  to?: string;    // in 'dd-MM-yyyy' or ISO format
+}
+
+// Function to fetch dashboard data (raw + aggregates) with optional filters
+export async function fetchCompetitionData(filters: FetchFilters = {}): Promise<DashboardPayload> {
   const start = performance.now();
   try {
-    const response = await fetch("/api/data");
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to fetch data");
+    // Fetch summary data for KPI metrics
+    const summaryPayload = await fetchSummaryData(filters);
+
+    // If pincode drill-down, fetch raw data; otherwise clear rawData
+    if (filters.pincode) {
+      const rawResult = await fetchRawData(filters);
+      summaryPayload.rawData = rawResult.rawData;
+    } else {
+      summaryPayload.rawData = [];
     }
-    
-    const payload = await response.json();
-    // Expect payload shape: { rawData, kpis, timeSeriesData, regionalData, platformShareData, brandCoverage }
-    return payload as DashboardPayload;
+
+    return summaryPayload;
   } catch (error) {
     console.error("Error fetching competition data:", error);
     throw error;
   } finally {
     const duration = performance.now() - start;
-    console.log(`fetchCompetitionData took ${duration.toFixed(2)} ms`);
   }
 }
 
@@ -345,8 +358,6 @@ function calculateNotAvailableSKUs(data: ProcessedData[]): number {
 
 // Function to calculate penetration
 function calculatePenetration(data: ProcessedData[]): number {
-  
-  // Group data by pincode to determine serviceable and listed pincodes
   const pincodeMap = new Map<string, ProcessedData[]>();
   data.forEach(item => {
     if (!pincodeMap.has(item.pincode)) {
@@ -354,60 +365,34 @@ function calculatePenetration(data: ProcessedData[]): number {
     }
     pincodeMap.get(item.pincode)!.push(item);
   });
-  
-  // Serviceable pincodes are those where at least one product has "Yes", "No", or "Item Not Found" availability
-  const serviceablePincodes = new Set();
+
+  const serviceablePincodes = new Set<string>();
+  const listedPincodes = new Set<string>();
   pincodeMap.forEach((items, pincode) => {
-    const isServiceable = items.some(item => 
-      item.availability === "Yes" || 
-      item.availability === "No" || 
+    const isServiceable = items.some(item =>
+      item.availability === "Yes" ||
+      item.availability === "No" ||
       item.availability === "Item Not Found"
     );
     if (isServiceable) {
       serviceablePincodes.add(pincode);
+      const isListed = items.some(item =>
+        item.availability === "Yes" || item.availability === "No"
+      );
+      if (isListed) {
+        listedPincodes.add(pincode);
+      }
     }
   });
-  
-  // Get all items in serviceable pincodes
-  const serviceableItems = data.filter(item => 
-    serviceablePincodes.has(item.pincode)
-  );
-  
-  // Count items with "Yes" or "No" availability (Listed items)
-  const listedItems = serviceableItems.filter(item => 
-    item.availability === "Yes" || item.availability === "No"
-  ).length;
-  
-  // Total items in serviceable pincodes
-  const totalItems = serviceableItems.length;
-  
-  // Penetration = Number of Listed Items / Total Serviceable Items
-  const penetration = (listedItems / totalItems) * 100;
-  
+
+  const penetration = serviceablePincodes.size > 0
+    ? (listedPincodes.size / serviceablePincodes.size) * 100
+    : 0;
   return penetration;
 }
 
 // Function to calculate availability
 function calculateAvailability(data: ProcessedData[]): number {
-  
-  // Count items with "Yes" availability
-  const availableItems = data.filter(item => item.availability === "Yes").length;
-  
-  // Count items with "Yes" or "No" availability (listed items)
-  const listedItems = data.filter(item => 
-    item.availability === "Yes" || item.availability === "No"
-  ).length;
-  
-  // Availability = Number of "Yes" Items / Total Listed Items
-  const availability = (availableItems / listedItems) * 100;
-  
-  return availability;
-}
-
-// Function to calculate coverage
-function calculateCoverage(data: ProcessedData[]): number {
-  
-  // Group data by pincode
   const pincodeMap = new Map<string, ProcessedData[]>();
   data.forEach(item => {
     if (!pincodeMap.has(item.pincode)) {
@@ -415,36 +400,58 @@ function calculateCoverage(data: ProcessedData[]): number {
     }
     pincodeMap.get(item.pincode)!.push(item);
   });
-  
-  // Serviceable pincodes are those where at least one product has "Yes", "No", or "Item Not Found" availability
-  const serviceablePincodes = new Set();
+
+  const listedPincodes = new Set<string>();
+  const availablePincodes = new Set<string>();
   pincodeMap.forEach((items, pincode) => {
-    const isServiceable = items.some(item => 
-      item.availability === "Yes" || 
-      item.availability === "No" || 
+    const isListed = items.some(item =>
+      item.availability === "Yes" || item.availability === "No"
+    );
+    if (isListed) {
+      listedPincodes.add(pincode);
+      const isAvailable = items.some(item => item.availability === "Yes");
+      if (isAvailable) {
+        availablePincodes.add(pincode);
+      }
+    }
+  });
+
+  const availability = listedPincodes.size > 0
+    ? (availablePincodes.size / listedPincodes.size) * 100
+    : 0;
+  return availability;
+}
+
+// Function to calculate coverage
+function calculateCoverage(data: ProcessedData[]): number {
+  const pincodeMap = new Map<string, ProcessedData[]>();
+  data.forEach(item => {
+    if (!pincodeMap.has(item.pincode)) {
+      pincodeMap.set(item.pincode, []);
+    }
+    pincodeMap.get(item.pincode)!.push(item);
+  });
+
+  const serviceablePincodes = new Set<string>();
+  const availablePincodes = new Set<string>();
+  pincodeMap.forEach((items, pincode) => {
+    const isServiceable = items.some(item =>
+      item.availability === "Yes" ||
+      item.availability === "No" ||
       item.availability === "Item Not Found"
     );
     if (isServiceable) {
       serviceablePincodes.add(pincode);
+      const isAvailable = items.some(item => item.availability === "Yes");
+      if (isAvailable) {
+        availablePincodes.add(pincode);
+      }
     }
   });
-  
-  // Get all items in serviceable pincodes
-  const serviceableItems = data.filter(item => 
-    serviceablePincodes.has(item.pincode)
-  );
-  
-  // Count available items (Yes availability)
-  const availableItems = serviceableItems.filter(item => 
-    item.availability === "Yes"
-  ).length;
-  
-  // Total serviceable items
-  const totalServiceableItems = serviceableItems.length;
-  
-  // Coverage = Number of "Yes" Items / Total Serviceable Items
-  const coverage = (availableItems / totalServiceableItems) * 100;
-  
+
+  const coverage = serviceablePincodes.size > 0
+    ? (availablePincodes.size / serviceablePincodes.size) * 100
+    : 0;
   return coverage;
 }
 
@@ -1158,10 +1165,14 @@ export function getRegionalData(data: ProcessedData[]): {
   stockAvailability: number;
   stockOutPercent: number;
 }[] {
+
+
       // Group data by pincode
       const pincodeMap = new Map<string, ProcessedData[]>();
   
   data.forEach(item => {
+
+        
         if (!pincodeMap.has(item.pincode)) {
           pincodeMap.set(item.pincode, []);
         }
@@ -1169,6 +1180,8 @@ export function getRegionalData(data: ProcessedData[]): {
         pincodeMap.get(item.pincode)!.push(item);
       });
       
+
+
   // Calculate metrics for each pincode
   return Array.from(pincodeMap.entries()).map(([pincode, items]) => {
     const city = items[0].city;
@@ -1533,50 +1546,99 @@ export function getBrandData(data: ProcessedData[]): {
     .sort((a, b) => b.skuCount - a.skuCount);
 }
 
-// Function to get product data
+// Function to get product data - aggregates summary data by product (one row per product)
 export function getProductData(data: ProcessedData[]): {
   brand: string;
   name: string;
   mrp: number | null;
   sellingPrice: number | null;
   availability: number;
+  coverage?: number;
+  penetration?: number;
+  discount?: number;
 }[] {
-  // Group data by product ID
-  const productMap = new Map<string, ProcessedData[]>();
+  // Group data by product name (since we want one row per unique product)
+  const productMap = new Map<string, any[]>();
 
   data.forEach(item => {
-    if (!item.productId) return; // Skip entries with no productId
+    const key = `${item.brand || ''}_${item.productDescription || ''}`;
+    if (!key || key === '_') return; // Skip entries with no brand or product name
 
-    if (!productMap.has(item.productId)) {
-      productMap.set(item.productId, []);
+    if (!productMap.has(key)) {
+      productMap.set(key, []);
     }
 
-    productMap.get(item.productId)!.push(item);
+    productMap.get(key)!.push(item);
   });
 
-  // Calculate metrics for each product
+  // Calculate aggregated metrics for each product
   return Array.from(productMap.entries())
-    .map(([_, items]) => {
+    .map(([key, items]) => {
+      if (items.length === 0) return null;
+      
       // Get product info from first item
       const product = items[0];
       
-      // Calculate availability percentage
-      const availableItems = items.filter(item => item.availability === "Yes").length;
-      const listedItems = items.filter(item => 
-        item.availability === "Yes" || item.availability === "No"
-      ).length;
-      const availability = listedItems > 0 ? 
-        Math.round((availableItems / listedItems) * 100) : 0;
+      // Calculate mean MRP (filter out NaN and 0 values)
+      const validMrps = items
+        .map(item => typeof item.mrp === "number" && !isNaN(item.mrp) && item.mrp > 0 ? item.mrp : null)
+        .filter(mrp => mrp !== null);
+      const avgMrp = validMrps.length > 0 ? 
+        validMrps.reduce((sum, mrp) => sum + mrp!, 0) / validMrps.length : null;
 
-      return {
-        brand: product.brand,
-        name: product.productDescription,
-        mrp: typeof product.mrp === "number" && !isNaN(product.mrp) ? product.mrp : null,
-        sellingPrice: typeof product.sellingPrice === "number" && !isNaN(product.sellingPrice) ? product.sellingPrice : null,
-        availability,
-      };
+      // Calculate mean Selling Price (filter out NaN and 0 values)
+      const validSps = items
+        .map(item => typeof item.sellingPrice === "number" && !isNaN(item.sellingPrice) && item.sellingPrice > 0 ? item.sellingPrice : null)
+        .filter(sp => sp !== null);
+      const avgSellingPrice = validSps.length > 0 ? 
+        validSps.reduce((sum, sp) => sum + sp!, 0) / validSps.length : null;
+
+      // Calculate mean discount (filter out NaN values)
+      const validDiscounts = items
+        .map(item => typeof item.discount === "number" && !isNaN(item.discount) ? item.discount : null)
+        .filter(discount => discount !== null);
+      const avgDiscount = validDiscounts.length > 0 ? 
+        validDiscounts.reduce((sum, discount) => sum + discount!, 0) / validDiscounts.length : null;
+
+      // Calculate mean availability percentage (from normalized summary data)
+      const validAvailabilities = items
+        .map(item => typeof item.availability === "number" && !isNaN(item.availability) ? item.availability : null)
+        .filter(availability => availability !== null);
+      const avgAvailability = validAvailabilities.length > 0 ? 
+        validAvailabilities.reduce((sum, availability) => sum + availability!, 0) / validAvailabilities.length : 0;
+
+      // Calculate mean coverage percentage (from normalized summary data)
+      const validCoverages = items
+        .map(item => typeof item.coverage === "number" && !isNaN(item.coverage) ? item.coverage : null)
+        .filter(coverage => coverage !== null);
+      const avgCoverage = validCoverages.length > 0 ? 
+        validCoverages.reduce((sum, coverage) => sum + coverage!, 0) / validCoverages.length : 0;
+
+      // Calculate mean penetration percentage (from normalized summary data)
+      const validPenetrations = items
+        .map(item => typeof item.penetration === "number" && !isNaN(item.penetration) ? item.penetration : null)
+        .filter(penetration => penetration !== null);
+      const avgPenetration = validPenetrations.length > 0 ? 
+        validPenetrations.reduce((sum, penetration) => sum + penetration!, 0) / validPenetrations.length : 0;
+
+              return {
+          brand: product.brand || '',
+          name: product.productDescription || '',
+          mrp: avgMrp ? Math.round(avgMrp) : null,
+          sellingPrice: avgSellingPrice ? Math.round(avgSellingPrice) : null,
+          availability: Math.round(avgAvailability * 100), // Convert to percentage
+          coverage: Math.round(avgCoverage * 100), // Convert to percentage
+          penetration: Math.round(avgPenetration * 100), // Convert to percentage
+          discount: avgDiscount ? parseFloat(avgDiscount.toFixed(1)) : undefined,
+        };
     })
-    .sort((a, b) => (a.brand && b.brand) ? a.brand.localeCompare(b.brand) : 0);
+    .filter(item => item !== null)
+    .sort((a, b) => {
+      if (a!.brand !== b!.brand) {
+        return a!.brand.localeCompare(b!.brand);
+      }
+      return a!.name.localeCompare(b!.name);
+    });
 }
 
 // Function to get choropleth data for map visualizations
@@ -1718,4 +1780,55 @@ export function getCoverageByBrandData(data: ProcessedData[]): {
       };
     })
     .sort((a, b) => b.coverage - a.coverage); // Sort by coverage in descending order
+}
+
+// New: fetch summary data from precomputed endpoint
+export async function fetchSummaryData(filters: FetchFilters = {}): Promise<DashboardPayload> {
+  const params = new URLSearchParams();
+  if (filters.brand?.length)   params.set('brand', filters.brand.join(','));
+  if (filters.company?.length) params.set('company', filters.company.join(','));
+  if (filters.product?.length) params.set('product', filters.product.join(','));
+  if (filters.city?.length)    params.set('city', filters.city.join(','));
+  if (filters.platform?.length)params.set('platform', filters.platform.join(','));
+  if (filters.from)             params.set('from', filters.from);
+  if (filters.to)               params.set('to', filters.to);
+  const url = `/api/summary${params.toString() ? `?${params.toString()}` : ''}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to fetch summary data');
+  }
+  return (await response.json()) as DashboardPayload;
+}
+
+// New: fetch raw data drill-down by pincode
+export async function fetchRawData(filters: FetchFilters = {}): Promise<{ rawData: ProcessedData[] }> {
+  const params = new URLSearchParams();
+  if (filters.brand?.length)    params.set('brand', filters.brand.join(','));
+  if (filters.company?.length)  params.set('company', filters.company.join(','));
+  if (filters.product?.length)  params.set('product', filters.product.join(','));
+  if (filters.city?.length)     params.set('city', filters.city.join(','));
+  if (filters.platform?.length) params.set('platform', filters.platform.join(','));
+  if (filters.pincode)          params.set('pincode', filters.pincode);
+  if (filters.from)             params.set('from', filters.from);
+  if (filters.to)               params.set('to', filters.to);
+  const url = `/api/raw${params.toString() ? `?${params.toString()}` : ''}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    let errorMessage = 'Failed to fetch raw data';
+    try {
+    const errorData = await response.json();
+      errorMessage = errorData.error || errorMessage;
+    } catch (e) {
+      // ignore JSON parsing error for empty or invalid error response
+    }
+    throw new Error(errorMessage);
+  }
+  let data: { rawData: ProcessedData[] };
+  try {
+    data = await response.json() as { rawData: ProcessedData[] };
+  } catch (e) {
+    throw new Error('Failed to parse raw data response');
+  }
+  return data;
 }

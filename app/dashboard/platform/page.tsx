@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { FilterBar } from "@/components/filters/filter-bar";
 import {
   Card,
@@ -9,300 +10,93 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { BarChart, LineChart, PieChart } from "@/components/ui/chart";
-import { Badge } from "@/components/ui/badge";
+import { BarChart } from "@/components/ui/chart";
 import { useData } from "@/components/data-provider";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useFilters } from "@/components/filters/filter-provider";
-import { useState } from "react";
-import { ProcessedData } from "@/lib/data-service";
-import { Icons } from "@/components/icons";
-import { 
-  calculateKPIs
-} from "@/lib/data-service";
+import { calculateKPIs } from "@/lib/data-service";
 import { badgeVariants } from "@/components/ui/badge";
-import { ResponsiveContainer, LineChart as RechartsLineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Bar, Cell, LabelList } from "recharts";
-import React from "react";
+import { ResponsiveContainer, LineChart as RechartsLineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import { format } from 'date-fns';
 
 // Define platform colors for consistent styling
 const PLATFORM_COLORS = ["#8b5cf6", "#0088fe", "#00c49f", "#9B59B6", "#F1C40F"];
 
 export default function PlatformInsightsPage() {
-  const { isLoading, platformData, platformShareData, filteredData, timeSeriesData } = useData();
-  const { filters } = useFilters();
+  const { isLoading, normalizedSummaryData, summaryPlatformMetrics, kpis } = useData();
   
-  // Helper function to format date for consistent comparison
-  const formatDateForComparison = (dateInput: Date | string | undefined): string => {
-    if (!dateInput) return "";
-    
-    // If it's a Date object, convert to string in YYYY-MM-DD format using local date
-    if (dateInput instanceof Date) {
-      const year = dateInput.getFullYear();
-      const month = String(dateInput.getMonth() + 1).padStart(2, '0');
-      const day = String(dateInput.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-    
-    // If it's a string in DD-MM-YYYY format, convert to YYYY-MM-DD
-    if (typeof dateInput === 'string') {
-      const parts = dateInput.split('-');
-      if (parts.length === 3) {
-        // If it looks like DD-MM-YYYY, convert to YYYY-MM-DD
-        if (parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
-          return `${parts[2]}-${parts[1]}-${parts[0]}`;
-        }
-      }
-      return dateInput; // Return original format if not DD-MM-YYYY
-    }
-    
-    return ""; // Fallback
-  };
+  type PlatformMetric = { name: string; availability: number; penetration: number; discount: number; coverage: number };
+  const platformMetrics: PlatformMetric[] = (summaryPlatformMetrics as { name: string; availability: number; penetration: number; discount: number }[]).map(p => ({
+    name: p.name,
+    availability: p.availability,
+    penetration: p.penetration,
+    discount: p.discount,
+    coverage: parseFloat(((p.availability * p.penetration) / 100).toFixed(1)),
+  }));
   
-  // Helper function to format date for display
-  const formatDateForDisplay = (dateStr: string): string => {
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-      // If it's YYYY-MM-DD, convert to DD-MM-YYYY for display
-      if (parts[0].length === 4) {
-        return `${parts[2]}-${parts[1]}-${parts[0]}`;
-      }
-    }
-    return dateStr;
-  };
-  
-  // Helper function to group data by platform
-  const groupByPlatform = (data: ProcessedData[]) => {
-    return Array.from(
-      data.reduce((map, item) => {
-        // Skip items with undefined, null, or empty platform values
-        if (!item.platform) return map;
-        
-        const platform = item.platform;
-        
-        // Initialize entry if it doesn't exist
-        if (!map.has(platform)) {
-          map.set(platform, { 
-            items: [],
-            platform
-          });
-        }
-        
-        // Add item to the platform group
-        map.get(platform)?.items.push(item);
-        return map;
-      }, new Map<string, { items: ProcessedData[], platform: string }>())
-    );
-  };
-  
-  // Helper function to group data by report date
-  const groupByReportDate = (data: ProcessedData[]) => {
-    return Array.from(
-      data.reduce((map, item) => {
-        // Skip items with no reportDate
-        if (!item.reportDate) return map;
-        
-        // Get date string in consistent format
-        const dateStr = formatDateForComparison(item.reportDate);
-        if (!dateStr) return map;
-        
-        // Initialize entry if it doesn't exist
-        if (!map.has(dateStr)) {
-          map.set(dateStr, { 
-            items: [],
-            date: dateStr
-          });
-        }
-        
-        // Add item to the date group
-        map.get(dateStr)?.items.push(item);
-        return map;
-      }, new Map<string, { items: ProcessedData[], date: string }>())
-    );
-  };
+  // Get unique platform names from summary
+  const platformNames = !isLoading ? platformMetrics.map(p => p.name) : [];
 
-  // Get unique platform names
-  const platformNames = !isLoading ? 
-    Array.from(new Set(filteredData.map(item => item.platform).filter(Boolean))) as string[] : 
-    [];
-
-  // Get report dates in consistent format
-  const reportDates = !isLoading ? 
-    Array.from(new Set(
-      filteredData
-        .filter(item => item.reportDate)
-        .map(item => formatDateForComparison(item.reportDate))
-        .filter(Boolean) // Remove empty strings
-    )).sort((a, b) => a.localeCompare(b))
+  // Build list of unique report dates from summary data
+  const uniqueDateTimes = !isLoading
+    ? Array.from(
+        new Set(
+          normalizedSummaryData
+            .map(item => item.reportDate?.getTime())
+            .filter((ts): ts is number => typeof ts === 'number')
+        )
+      )
     : [];
+  const uniqueDates = uniqueDateTimes
+    .map(timestamp => new Date(timestamp))
+    .sort((a, b) => a.getTime() - b.getTime());
+  // Format dates for display on X axis
+  const reportDates = uniqueDates.map(d => format(d, 'dd-MM-yyyy'));
 
-  // Graph 1: Dual Bar Graph - Availability & Penetration by platform
-  const platformMetricsData = !isLoading ? 
-    groupByPlatform(filteredData).map(
-      ([platformName, { items, platform }]) => {
-        const metrics = calculateKPIs(items);
-        return {
-          name: platform,
-          availability: parseFloat(metrics.availability.toFixed(1)),
-          penetration: parseFloat(metrics.penetration.toFixed(1))
-        };
-      }
-    ).filter(item => item.name) // Filter out empty platforms
-    .sort((a, b) => a.name.localeCompare(b.name)) 
-    : [];
+  // Graph 1: Dual Bar Graph - Availability & Penetration by platform (from summary)
+  const platformMetricsData = !isLoading ? platformMetrics.map(item => ({
+    name: item.name,
+    availability: item.availability,
+    penetration: item.penetration
+  })).sort((a, b) => a.name.localeCompare(b.name)) : [];
 
-  // Graph 2: Average discount by platform data transformation
-  const platformDiscountData = !isLoading ? 
-    groupByPlatform(filteredData).map(
-      ([platformName, { items, platform }]) => {
-        // Calculate average discount for this platform
-        // For each item, if discount is 0 or invalid, calculate it from MRP and selling price
-        const validItems = items.filter(item => {
-          // Check if we have valid MRP and Selling Price
-          const hasPriceData = item.mrp > 0 && !isNaN(item.sellingPrice) && !isNaN(item.mrp);
-          
-          // Use the discount field if available, otherwise try to calculate it
-          if (item.discount > 0) {
-            return true;
-          } else if (hasPriceData) {
-            // We can calculate discount from price data
-            return true;
-          }
-          return false;
-        });
-        
-        // Calculate total discount, using calculated values when necessary
-        const totalDiscount = validItems.reduce((sum, item) => {
-          // If discount is already set and valid, use it
-          if (item.discount > 0) {
-            return sum + item.discount;
-          }
-          
-          // Otherwise calculate from MRP and selling price
-          if (item.mrp > 0) {
-            const calculatedDiscount = ((item.mrp - item.sellingPrice) / item.mrp) * 100;
-            return sum + calculatedDiscount;
-          }
-          
-          return sum;
-        }, 0);
-        
-        const avgDiscount = validItems.length > 0 ? totalDiscount / validItems.length : 0;
-        
-        return {
-          name: platform,
-          discount: parseFloat(avgDiscount.toFixed(1)),
-          Discount: parseFloat(avgDiscount.toFixed(1)) // Capitalized for visualization
-        };
-      }
-    ).filter(item => item.name) // Extra filter to ensure no empty platform names
-    .sort((a, b) => a.name.localeCompare(b.name))
-    : [];
+  // Graph 2: Average discount by platform (from summary)
+  const platformDiscountData = !isLoading ? platformMetrics.map(item => ({
+    name: item.name,
+    discount: item.discount,
+    Discount: item.discount
+  })).sort((a, b) => a.name.localeCompare(b.name)) : [];
 
-  // Graph 3: Trend line cards data
-  // Calculate avg metrics for the most recent period
-  const latestDate = reportDates.length > 0 ? reportDates[reportDates.length - 1] : '';
-  const previousDate = reportDates.length > 1 ? reportDates[reportDates.length - 2] : '';
-  
-  // Function to calculate metrics for a specific date
-  const calculateMetricsForDate = (date: string) => {
-    const items = filteredData.filter(item => {
-      if (!item.reportDate) return false;
-      return formatDateForComparison(item.reportDate) === date;
-    });
-    
-    // If no items for this date, return zeroes
-    if (items.length === 0) {
-      return {
-        penetration: 0,
-        availability: 0,
-        coverage: 0,
-        discount: 0
-      };
-    }
-    
-    // Use the updated metrics calculation function from data-service
-    const metricsResult = calculateKPIs(items);
-    
-    // Calculate average discount, using MRP and selling price when needed
-    const validItems = items.filter(item => {
-      // Check if we have valid MRP and Selling Price
-      const hasPriceData = item.mrp > 0 && !isNaN(item.sellingPrice) && !isNaN(item.mrp);
-      
-      // Use the discount field if available, otherwise try to calculate it
-      if (item.discount > 0) {
-        return true;
-      } else if (hasPriceData) {
-        // We can calculate discount from price data
-        return true;
-      }
-      return false;
-    });
-    
-    // Calculate total discount, using calculated values when necessary
-    const totalDiscount = validItems.reduce((sum, item) => {
-      // If discount is already set and valid, use it
-      if (item.discount > 0) {
-        return sum + item.discount;
-      }
-      
-      // Otherwise calculate from MRP and selling price
-      if (item.mrp > 0) {
-        const calculatedDiscount = ((item.mrp - item.sellingPrice) / item.mrp) * 100;
-        return sum + calculatedDiscount;
-      }
-      
-      return sum;
-    }, 0);
-    
-    const avgDiscount = validItems.length > 0 ? totalDiscount / validItems.length : 0;
-    
-    return {
-      penetration: parseFloat(metricsResult.penetration.toFixed(1)),
-      availability: parseFloat(metricsResult.availability.toFixed(1)),
-      coverage: parseFloat(metricsResult.coverageMethod1.toFixed(1)), // Use Method 1 for coverage
-      discount: parseFloat(avgDiscount.toFixed(1))
-    };
-  };
-  
-  const latestMetrics = !isLoading && latestDate ? calculateMetricsForDate(latestDate) : null;
-  const previousMetrics = !isLoading && previousDate ? calculateMetricsForDate(previousDate) : null;
-  
-  // Update the metricDeltas to include only the main coverage metric
-  const metricDeltas = !isLoading && latestMetrics && previousMetrics ? {
-    penetration: parseFloat((latestMetrics.penetration - previousMetrics.penetration).toFixed(1)),
-    availability: parseFloat((latestMetrics.availability - previousMetrics.availability).toFixed(1)),
-    coverage: parseFloat((latestMetrics.coverage - previousMetrics.coverage).toFixed(1)),
-    discount: parseFloat((latestMetrics.discount - previousMetrics.discount).toFixed(1))
-  } : null;
+  // Compute overall KPI values for cards
+  const penetrationValue = !isLoading ? Math.round(kpis.penetration) : 0;
+  const availabilityValue = !isLoading ? Math.round(kpis.availability) : 0;
+  const coverageValue = !isLoading ? Math.round(kpis.coverage) : 0;
+  // Average discount across summary data
+  const avgDiscountValue = !isLoading && normalizedSummaryData.length > 0
+    ? Math.round(
+        normalizedSummaryData.reduce((sum, item) => sum + (item.discount ?? 0), 0) / normalizedSummaryData.length
+      )
+    : 0;
 
   // Graph 4: Multi-line chart — Coverage % by platform vs. Date  
-  const coverageByPlatformData = !isLoading ? 
-    reportDates.map(date => {
-      // Create one entry per date with display format
-      const dateEntry: any = {
-        date: formatDateForDisplay(date)
-      };
-      
-      // For each platform, calculate metrics for this date
-      platformNames.filter(platform => platform).forEach(platform => {
-        // Get items for this date and platform
-        const platformItems = filteredData.filter(item => {
-          if (!item.reportDate || !item.platform) return false;
-          return formatDateForComparison(item.reportDate) === date && 
-                 item.platform === platform;
+  const coverageByPlatformData = !isLoading
+    ? uniqueDates.map(date => {
+        const dateStr = format(date, 'dd-MM-yyyy');
+        const entry: Record<string, number | string> = { date: dateStr };
+        platformNames.forEach(platform => {
+          const items = normalizedSummaryData.filter(
+            item => item.platform === platform &&
+                    item.reportDate?.getTime() === date.getTime()
+          );
+          if (items.length > 0) {
+            const avgCoverage =
+              (items.reduce((sum, i) => sum + (i.coverage ?? 0), 0) / items.length) * 100;
+            entry[platform] = parseFloat(avgCoverage.toFixed(1));
+          } else {
+            entry[platform] = 0;
+          }
         });
-        
-        // Calculate metrics for this platform and date
-        if (platformItems.length > 0) {
-          const platformMetrics = calculateKPIs(platformItems);
-          dateEntry[platform] = parseFloat(platformMetrics.coverageMethod1.toFixed(1));
-        } else {
-          dateEntry[platform] = 0;
-        }
-      });
-      
-      return dateEntry;
-    })
+        return entry;
+      })
     : [];
     
   // Ensure all platforms have some data for better visualization
@@ -330,12 +124,6 @@ export default function PlatformInsightsPage() {
     
     return augmentedData;
   };
-
-  // Capitalize labels in the graph legend
-  const legendLabels = [
-    { label: "Availability", color: "#FFA500" },
-    { label: "Penetration", color: "#1E90FF" }
-  ];
 
   return (
     <div className="space-y-6">
@@ -409,8 +197,8 @@ export default function PlatformInsightsPage() {
             ) : (
               platformDiscountData && platformDiscountData.length > 0 ? (
                 <div className="flex flex-col h-full justify-center space-y-6 py-2">
-                  {platformDiscountData.map((platform, index) => (
-                    <div key={index} className="flex flex-col">
+                  {platformDiscountData.map((platform) => (
+                    <div key={platform.name} className="flex flex-col">
                       <div className="flex justify-between mb-1">
                         <span className="text-sm font-medium">{platform.name}</span>
                         <span className="text-sm font-medium">{platform.Discount}%</span>
@@ -443,15 +231,11 @@ export default function PlatformInsightsPage() {
               <CardTitle className="text-md font-medium">
                 Penetration
               </CardTitle>
-              <div className={badgeVariants({ variant: "outline" })}>
-                <span className={metricDeltas?.penetration && metricDeltas.penetration > 0 ? "text-green-500" : metricDeltas?.penetration && metricDeltas.penetration < 0 ? "text-destructive" : ""}>
-                  {metricDeltas?.penetration && metricDeltas.penetration > 0 ? "+" : ""}{metricDeltas?.penetration || 0}%
-                </span>
-              </div>
+              {/* no delta badges for platform-level KPIs */}
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold mt-2">
-                {latestMetrics?.penetration || 0}%
+                {penetrationValue}%
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 Listed Pincodes / Serviceable Pincodes
@@ -465,15 +249,11 @@ export default function PlatformInsightsPage() {
               <CardTitle className="text-md font-medium">
                 Availability
               </CardTitle>
-              <div className={badgeVariants({ variant: "outline" })}>
-                <span className={metricDeltas?.availability && metricDeltas.availability > 0 ? "text-green-500" : metricDeltas?.availability && metricDeltas.availability < 0 ? "text-destructive" : ""}>
-                  {metricDeltas?.availability && metricDeltas.availability > 0 ? "+" : ""}{metricDeltas?.availability || 0}%
-                </span>
-              </div>
+              {/* no delta badges */}
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold mt-2">
-                {latestMetrics?.availability || 0}%
+                {availabilityValue}%
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 Available Pincodes / Listed Pincodes
@@ -487,15 +267,11 @@ export default function PlatformInsightsPage() {
               <CardTitle className="text-md font-medium">
                 Coverage
               </CardTitle>
-              <div className={badgeVariants({ variant: "outline" })}>
-                <span className={metricDeltas?.coverage && metricDeltas.coverage > 0 ? "text-green-500" : metricDeltas?.coverage && metricDeltas.coverage < 0 ? "text-destructive" : ""}>
-                  {metricDeltas?.coverage && metricDeltas.coverage > 0 ? "+" : ""}{metricDeltas?.coverage || 0}%
-                </span>
-              </div>
+              {/* no delta badges */}
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold mt-2">
-                {latestMetrics?.coverage || 0}%
+                {coverageValue}%
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 Availability % × Penetration %
@@ -509,15 +285,11 @@ export default function PlatformInsightsPage() {
               <CardTitle className="text-md font-medium">
                 Avg. Discount
               </CardTitle>
-              <div className={badgeVariants({ variant: "outline" })}>
-                <span className={metricDeltas?.discount && metricDeltas.discount > 0 ? "text-green-500" : metricDeltas?.discount && metricDeltas.discount < 0 ? "text-destructive" : ""}>
-                  {metricDeltas?.discount && metricDeltas.discount > 0 ? "+" : ""}{metricDeltas?.discount || 0}%
-                </span>
-              </div>
+              {/* no delta badges */}
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold mt-2">
-                {latestMetrics?.discount || 0}%
+                {avgDiscountValue}%
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 Average discount across all products
@@ -544,7 +316,7 @@ export default function PlatformInsightsPage() {
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <RechartsLineChart
-                      data={coverageByPlatformData}
+                      data={ensurePlatformData()}
                       margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
                     >
                       <XAxis 

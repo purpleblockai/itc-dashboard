@@ -183,7 +183,7 @@ export function BarChart({
             fill={colors[i % colors.length]}
             radius={[4, 4, 0, 0]}
             animationDuration={1000}
-            barSize={data.length > 10 ? 10 : data.length > 5 ? 30 : 45}
+            barSize={40}
           />
         ))}
       </BarChartRecharts>

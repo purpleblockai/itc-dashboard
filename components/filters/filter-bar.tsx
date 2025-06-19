@@ -10,17 +10,18 @@ import { cn } from "@/lib/utils"
 import { CalendarIcon, Check, ChevronsUpDown, X } from "lucide-react"
 import { format } from "date-fns"
 import { Icons } from "@/components/icons"
-import { useFilters } from "./filter-provider"
+import { useFilters } from "@/components/filters/filter-provider"
 import { useData } from "@/components/data-provider"
 import { getUniqueValues } from "@/lib/data-service"
+import type { ProcessedData } from "@/lib/data-service"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 
 type DateRange = { from?: Date; to?: Date };
 
 
 export function FilterBar() {
-  const { filters, setFilters, resetFilters } = useFilters()
-  const { rawData, isLoading } = useData()
+  const { setFilters, filters, resetFilters } = useFilters()
+  const { unfilteredSummaryData, isLoading } = useData()
   const [brandOpen, setBrandOpen] = useState(false)
   const [productOpen, setProductOpen] = useState(false)
   const [platformOpen, setPlatformOpen] = useState(false)
@@ -41,57 +42,77 @@ export function FilterBar() {
 
   const [cities, setCities] = useState<{ label: string; value: string }[]>([{ label: "All Cities", value: "all" }])
 
-  // Update filter options when data is loaded
+  // Keep a normalized superset of all summary options for filters
+  const [supersetOptions, setSupersetOptions] = useState<Array<{ brand: string; company: string; productDescription: string; city: string; platform: string }>>([])
+
+  // Normalize unfiltered summary data from DataProvider instead of fetching separately
   useEffect(() => {
-    if (rawData.length > 0) {
-      // Get unique brands
-      const uniqueBrands = getUniqueValues(rawData, "brand")
-      setBrands([
-        { label: "All Brands", value: "all" },
-        ...uniqueBrands.map((brand) => ({ label: brand, value: brand })),
-      ])
-
-      // Get unique companies
-      const uniqueCompanies = getUniqueValues(rawData, "company")
-      setCompanies([
-        { label: "All Companies", value: "all" },
-        ...uniqueCompanies.map((company) => ({ label: company, value: company })),
-      ])
-
-      // Get unique platforms
-      const uniquePlatforms = getUniqueValues(rawData, "platform")
-      setPlatforms([
-        { label: "All Platforms", value: "all" },
-        ...uniquePlatforms.map((platform) => ({ label: platform, value: platform })),
-      ])
-
-      // Get unique cities
-      const uniqueCities = getUniqueValues(rawData, "city")
-      setCities([
-        { label: "All Cities", value: "all" },
-        ...uniqueCities.map((city) => ({
-          label: city.charAt(0).toUpperCase() + city.slice(1),
-          value: city,
-        })),
-      ])
-
-      // Get unique products, filtered by selected brands if any
-      let dataForProducts = rawData
-      if (filters.brand && filters.brand.length > 0) {
-        dataForProducts = rawData.filter((item) => filters.brand.includes(item.brand))
-      }
-      const productMap = new Map<string, string>()
-      dataForProducts.forEach((item) => {
-        if (!productMap.has(item.productId)) {
-          productMap.set(item.productId, item.productDescription)
-        }
-      })
-      const uniqueProducts = Array.from(productMap.entries())
-        .map(([value, label]) => ({ label, value }))
-        .sort((a, b) => a.label.localeCompare(b.label))
-      setProducts(uniqueProducts)
+    if (unfilteredSummaryData.length > 0) {
+      const normalized = unfilteredSummaryData.map((doc: any) => ({
+        brand: doc.Brand || doc.brand || "",
+        company: doc.Company || doc.company || "",
+        productDescription: doc.Name || doc.productDescription || "",
+        city: doc.City || doc.city || "",
+        platform: doc.Platform || doc.platform || "",
+      }))
+      setSupersetOptions(normalized)
     }
-  }, [rawData, filters.brand])
+  }, [unfilteredSummaryData])
+
+  // Update filter options when filters change, using the supersetOptions
+  useEffect(() => {
+    const source = supersetOptions
+    if (!source.length) return;
+
+    // Brand options (ignore current brand filter)
+    let brandSource = source.filter(item => !!item.brand);
+    if (filters.company.length) brandSource = brandSource.filter(item => filters.company.includes(item.company))
+    if (filters.product.length) brandSource = brandSource.filter(item => filters.product.includes(item.productDescription))
+    if (filters.city.length) brandSource = brandSource.filter(item => filters.city.includes(item.city))
+    if (filters.platform.length) brandSource = brandSource.filter(item => filters.platform.includes(item.platform))
+    const uniqueBrands = getUniqueValues(brandSource as unknown as ProcessedData[], "brand")
+    setBrands([{ label: "All Brands", value: "all" }, ...uniqueBrands.map(b => ({ label: b, value: b }))])
+
+    // Company options (ignore current company filter)
+    let companySource = source.filter(item => !!item.company);
+    if (filters.brand.length) companySource = companySource.filter(item => filters.brand.includes(item.brand))
+    if (filters.product.length) companySource = companySource.filter(item => filters.product.includes(item.productDescription))
+    if (filters.city.length) companySource = companySource.filter(item => filters.city.includes(item.city))
+    if (filters.platform.length) companySource = companySource.filter(item => filters.platform.includes(item.platform))
+    const uniqueCompanies = getUniqueValues(companySource as unknown as ProcessedData[], "company")
+    setCompanies([{ label: "All Companies", value: "all" }, ...uniqueCompanies.map(c => ({ label: c, value: c }))])
+
+    // Platform options (ignore current platform filter)
+    let platformSource = source.filter(item => !!item.platform);
+    if (filters.brand.length) platformSource = platformSource.filter(item => filters.brand.includes(item.brand))
+    if (filters.company.length) platformSource = platformSource.filter(item => filters.company.includes(item.company))
+    if (filters.product.length) platformSource = platformSource.filter(item => filters.product.includes(item.productDescription))
+    if (filters.city.length) platformSource = platformSource.filter(item => filters.city.includes(item.city))
+    const uniquePlatformValues = getUniqueValues(platformSource as unknown as ProcessedData[], "platform")
+    setPlatforms([{ label: "All Platforms", value: "all" }, ...uniquePlatformValues.map(p => ({ label: p, value: p }))])
+
+    // City options (ignore current city filter)
+    let citySource = source.filter(item => !!item.city);
+    if (filters.brand.length) citySource = citySource.filter(item => filters.brand.includes(item.brand))
+    if (filters.company.length) citySource = citySource.filter(item => filters.company.includes(item.company))
+    if (filters.product.length) citySource = citySource.filter(item => filters.product.includes(item.productDescription))
+    if (filters.platform.length) citySource = citySource.filter(item => filters.platform.includes(item.platform))
+    const uniqueCities = getUniqueValues(citySource as unknown as ProcessedData[], "city")
+    setCities([{ label: "All Cities", value: "all" }, ...uniqueCities.map(ct => ({ label: ct.charAt(0).toUpperCase() + ct.slice(1), value: ct }))])
+
+    // Product options (ignore current product filter)
+    let prodSource = source.filter(item => !!item.productDescription);
+    if (filters.brand.length) prodSource = prodSource.filter(item => filters.brand.includes(item.brand))
+    if (filters.company.length) prodSource = prodSource.filter(item => filters.company.includes(item.company))
+    if (filters.city.length) prodSource = prodSource.filter(item => filters.city.includes(item.city))
+    if (filters.platform.length) prodSource = prodSource.filter(item => filters.platform.includes(item.platform))
+    const prodMap = new Map<string, string>()
+    prodSource.forEach(item => prodMap.set(item.productDescription, item.productDescription))
+    const uniqueProducts = Array.from(prodMap.keys())
+      .map((v: string) => ({ label: v, value: v }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+    setProducts(uniqueProducts)
+  }, [supersetOptions, filters.brand, filters.company, filters.product, filters.city, filters.platform])
 
   // Derive actual filter options (exclude placeholder entries)
   const actualBrandOptions = brands.filter((b) => b.value !== "all");
@@ -257,10 +278,10 @@ export function FilterBar() {
               <CommandList>
                 <CommandEmpty>No products found.</CommandEmpty>
                 <CommandGroup>
-                  {products.map((prod) => (
+                  {products.map((prod, idx) => (
                     <CommandItem
-                      key={prod.value}
-                      value={prod.label}
+                      key={`${prod.value}-${idx}`}
+                      value={prod.value}
                       onSelect={() => {
                         const current = filters.product || []
                         const newSelections = current.includes(prod.value)
